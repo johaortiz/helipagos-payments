@@ -17,10 +17,6 @@ import ms from 'ms';
       useFactory: (configService: ConfigService) => ({
         secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
-          // JWT_EXPIRES_IN must be a valid ms duration string (e.g. '1h', '7d').
-          // Cast required: jsonwebtoken's StringValue type is not directly importable
-          // without adding ms as a direct dependency.
-
           expiresIn: configService.getOrThrow<string>(
             'JWT_EXPIRES_IN',
           ) as ms.StringValue,
