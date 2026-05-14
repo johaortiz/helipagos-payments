@@ -27,7 +27,7 @@ export class PaymentOrmEntity {
   status!: string;
 
   @Column({ type: 'date', name: 'expiration_date' })
-  expirationDate!: Date;
+  expirationDate!: string;
 
   @Column({ type: 'text', nullable: true, name: 'checkout_url' })
   checkoutUrl!: string | null;

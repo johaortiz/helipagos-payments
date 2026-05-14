@@ -52,7 +52,7 @@ export class PaymentResponseDto {
     dto.amount = payment.amount;
     dto.description = payment.description;
     dto.status = payment.status;
-    dto.expirationDate = payment.expirationDate.toISOString().split('T')[0];
+    dto.expirationDate = payment.expirationDate;
     dto.checkoutUrl = payment.checkoutUrl;
     dto.shortUrl = payment.shortUrl;
     dto.barCode = payment.barCode;

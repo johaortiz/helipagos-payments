@@ -19,7 +19,7 @@ export interface PaymentProps {
   amount: number;
   description: string;
   status: PaymentStatus;
-  expirationDate: Date;
+  expirationDate: string;
   checkoutUrl: string | null;
   shortUrl: string | null;
   barCode: string | null;
@@ -37,7 +37,7 @@ export class Payment {
   private _amount: number;
   private _description: string;
   private _status: PaymentStatus;
-  private _expirationDate: Date;
+  private _expirationDate: string;
   private _checkoutUrl: string | null;
   private _shortUrl: string | null;
   private _barCode: string | null;
@@ -76,7 +76,7 @@ export class Payment {
   get status(): PaymentStatus {
     return this._status;
   }
-  get expirationDate(): Date {
+  get expirationDate(): string {
     return this._expirationDate;
   }
   get checkoutUrl(): string | null {

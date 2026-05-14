@@ -37,7 +37,7 @@ export class CreatePaymentUseCase {
       amount: input.amount,
       description: input.description,
       status: PaymentStatus.PENDING,
-      expirationDate: new Date(input.expirationDate),
+      expirationDate: input.expirationDate,
       checkoutUrl: null,
       shortUrl: null,
       barCode: null,
@@ -94,7 +94,7 @@ export class CreatePaymentUseCase {
       shortUrl: payment.shortUrl,
       barCode: payment.barCode,
       amount: payment.amount,
-      expirationDate: payment.expirationDate.toISOString().split('T')[0],
+      expirationDate: payment.expirationDate,
       createdAt: payment.createdAt,
     };
   }

@@ -88,7 +88,7 @@ export class TypeOrmPaymentRepository extends PaymentRepository {
       description: orm.description,
       status: orm.status as PaymentStatus,
       // date columns may be returned as string depending on the driver config
-      expirationDate: new Date(orm.expirationDate),
+      expirationDate: orm.expirationDate,
       checkoutUrl: orm.checkoutUrl,
       shortUrl: orm.shortUrl,
       barCode: orm.barCode,
