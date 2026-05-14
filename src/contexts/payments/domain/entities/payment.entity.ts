@@ -20,6 +20,9 @@ export interface PaymentProps {
   description: string;
   status: PaymentStatus;
   expirationDate: Date;
+  checkoutUrl: string | null;
+  shortUrl: string | null;
+  barCode: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +38,9 @@ export class Payment {
   private _description: string;
   private _status: PaymentStatus;
   private _expirationDate: Date;
+  private _checkoutUrl: string | null;
+  private _shortUrl: string | null;
+  private _barCode: string | null;
   private _createdAt: Date;
   private _updatedAt: Date;
 
@@ -46,20 +52,48 @@ export class Payment {
     this._description = props.description;
     this._status = props.status;
     this._expirationDate = props.expirationDate;
+    this._checkoutUrl = props.checkoutUrl;
+    this._shortUrl = props.shortUrl;
+    this._barCode = props.barCode;
     this._createdAt = props.createdAt;
     this._updatedAt = props.updatedAt;
   }
 
   // ─── Getters ───────────────────────────────────────────────────────────────
 
-  get externalPaymentId(): number | null { return this._externalPaymentId; }
-  get externalReference(): string        { return this._externalReference; }
-  get amount(): number                   { return this._amount; }
-  get description(): string             { return this._description; }
-  get status(): PaymentStatus           { return this._status; }
-  get expirationDate(): Date            { return this._expirationDate; }
-  get createdAt(): Date                 { return this._createdAt; }
-  get updatedAt(): Date                 { return this._updatedAt; }
+  get externalPaymentId(): number | null {
+    return this._externalPaymentId;
+  }
+  get externalReference(): string {
+    return this._externalReference;
+  }
+  get amount(): number {
+    return this._amount;
+  }
+  get description(): string {
+    return this._description;
+  }
+  get status(): PaymentStatus {
+    return this._status;
+  }
+  get expirationDate(): Date {
+    return this._expirationDate;
+  }
+  get checkoutUrl(): string | null {
+    return this._checkoutUrl;
+  }
+  get shortUrl(): string | null {
+    return this._shortUrl;
+  }
+  get barCode(): string | null {
+    return this._barCode;
+  }
+  get createdAt(): Date {
+    return this._createdAt;
+  }
+  get updatedAt(): Date {
+    return this._updatedAt;
+  }
 
   // ─── Transitions ───────────────────────────────────────────────────────────
 
@@ -67,7 +101,12 @@ export class Payment {
    * Confirms the provider accepted the payment and assigned an external ID.
    * Only valid from PENDING.
    */
-  markAsCreated(externalPaymentId: number): void {
+  markAsCreated(
+    externalPaymentId: number,
+    checkoutUrl: string | null,
+    shortUrl: string | null,
+    barCode: string | null,
+  ): void {
     if (this._status === PaymentStatus.CREATED) return;
     if (this._status !== PaymentStatus.PENDING) {
       throw new PaymentDomainError(
@@ -75,6 +114,9 @@ export class Payment {
       );
     }
     this._externalPaymentId = externalPaymentId;
+    this._checkoutUrl = checkoutUrl;
+    this._shortUrl = shortUrl;
+    this._barCode = barCode;
     this._status = PaymentStatus.CREATED;
     this.touch();
   }

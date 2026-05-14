@@ -73,5 +73,7 @@ export abstract class PaymentProviderGateway {
    * Requests cancellation of a payment at the provider.
    * The caller is responsible for validating domain rules before invoking this.
    */
-  abstract cancelPayment(providerPaymentId: number): Promise<CancelPaymentResult>;
+  abstract cancelPayment(
+    providerPaymentId: number,
+  ): Promise<CancelPaymentResult>;
 }
