@@ -18,9 +18,10 @@ export class HandlePaymentWebhookUseCase {
     // (SELECT FOR UPDATE), but it operates on internal IDs. The infrastructure
     // implementation should wrap this lookup in a transaction to prevent
     // concurrent webhooks from corrupting the same payment's state.
-    const payment = await this.paymentRepository.findByExternalPaymentId(
-      input.id_sp,
-    );
+    const payment =
+      await this.paymentRepository.findByExternalPaymentIdForUpdate(
+        input.id_sp,
+      );
 
     if (!payment) {
       // The provider may send webhooks for payments unknown to this system

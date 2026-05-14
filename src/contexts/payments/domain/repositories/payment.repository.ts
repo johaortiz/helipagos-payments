@@ -46,4 +46,14 @@ export abstract class PaymentRepository {
   abstract existsByExternalReference(
     externalReference: string,
   ): Promise<boolean>;
+
+  /**
+   * Acquires a pessimistic write lock on the payment record by provider ID.
+   * Use this in webhook handlers to prevent concurrent state corruption
+   * when multiple webhooks arrive for the same payment simultaneously.
+   * Returns null if no payment exists for the given provider ID.
+   */
+  abstract findByExternalPaymentIdForUpdate(
+    externalPaymentId: number,
+  ): Promise<Payment | null>;
 }
