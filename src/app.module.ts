@@ -19,7 +19,7 @@ import { PaymentsModule } from './contexts/payments/payments.module';
         password: configService.getOrThrow<string>('DB_PASSWORD'),
         database: configService.getOrThrow<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: true,
+        synchronize: configService.get<string>('DB_SYNCHRONIZE') === 'true',
         logging: configService.get<string>('NODE_ENV') !== 'production',
       }),
     }),
