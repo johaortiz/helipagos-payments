@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { PaymentProviderGateway } from '../../domain/gateways/payment-provider.gateway';
 import { PaymentRepository } from '../../domain/repositories/payment.repository';
+import { PaymentNotFoundException } from '../../domain/exceptions/payment-not-found-exception';
 
 // ─── Output ───────────────────────────────────────────────────────────────────
 
@@ -32,7 +33,7 @@ export class GetPaymentUseCase {
     const payment = await this.paymentRepository.findById(id);
 
     if (!payment) {
-      throw new Error(`Payment not found: ${id}`);
+      throw new PaymentNotFoundException(id);
     }
 
     // If the payment has no provider ID it is still in PENDING state —

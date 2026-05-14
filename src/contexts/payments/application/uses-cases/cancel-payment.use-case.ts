@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PaymentNotFoundException } from '../../domain/exceptions/payment-not-found-exception';
 
 import { PaymentProviderGateway } from '../../domain/gateways/payment-provider.gateway';
 import { PaymentRepository } from '../../domain/repositories/payment.repository';
@@ -14,7 +15,7 @@ export class CancelPaymentUseCase {
     const payment = await this.paymentRepository.findById(id);
 
     if (!payment) {
-      throw new Error(`Payment not found: ${id}`);
+      throw new PaymentNotFoundException(id);
     }
 
     // Enforces domain rules: throws InvalidPaymentTransitionException or
