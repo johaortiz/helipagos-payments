@@ -47,7 +47,7 @@ export class GetPaymentUseCase {
         amount: payment.amount,
         description: payment.description,
         checkoutUrl: payment.checkoutUrl,
-        expirationDate: payment.expirationDate.toISOString().split('T')[0],
+        expirationDate: payment.expirationDate,
         createdAt: payment.createdAt,
         updatedAt: payment.updatedAt,
       };

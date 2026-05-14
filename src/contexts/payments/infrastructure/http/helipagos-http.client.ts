@@ -114,20 +114,22 @@ export class HelipagosHttpClient {
           { headers: this.authHeaders(), timeout: this.timeout },
         ),
       );
+
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       throw this.wrapError(error);
     }
   }
 
   async getPayment(id: number): Promise<HelipagosGetPaymentResponse[]> {
     const endpoint = '/api/solicitud_pago/v1/get_solicitud_pago';
-    this.logger.log(`GET ${endpoint} — id: ${id}`);
+    this.logger.log(`POST ${endpoint} — id: ${id}`);
 
     try {
       const response = await firstValueFrom(
-        this.httpService.get<HelipagosGetPaymentResponse[]>(
+        this.httpService.post<HelipagosGetPaymentResponse[]>(
           `${this.baseUrl}${endpoint}`,
+          {},
           {
             params: { id },
             headers: this.authHeaders(),
@@ -167,7 +169,10 @@ export class HelipagosHttpClient {
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   private authHeaders(): Record<string, string> {
-    return { Authorization: `Bearer ${this.bearerToken}` };
+    return {
+      Authorization: `Bearer ${this.bearerToken}`,
+      'Content-Type': 'application/json',
+    };
   }
 
   private wrapError(error: unknown): HelipagosUnavailableError {
