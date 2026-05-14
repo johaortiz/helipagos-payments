@@ -57,7 +57,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
   } {
     // NestJS built-in exceptions (thrown by pipes, guards, etc.)
     if (exception instanceof HttpException) {
-      const status = exception.getStatus() as HttpStatus;
+      const status = exception.getStatus();
       const res = exception.getResponse();
       const message =
         typeof res === 'string'
