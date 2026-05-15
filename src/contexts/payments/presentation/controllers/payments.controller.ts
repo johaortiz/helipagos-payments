@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -64,7 +65,9 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Get a payment by ID' })
   @ApiResponse({ status: 200, type: PaymentResponseDto })
   @ApiResponse({ status: 404, description: 'Payment not found.' })
-  async findById(@Param('id') id: string): Promise<PaymentResponseDto> {
+  async findById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PaymentResponseDto> {
     const output = await this.getPaymentUseCase.execute(id);
 
     return PaymentResponseDto.fromGetOutput(output);
@@ -101,7 +104,7 @@ export class PaymentsController {
     description: 'Invalid payment state transition.',
   })
   @ApiResponse({ status: 409, description: 'Payment already finalized.' })
-  async cancel(@Param('id') id: string): Promise<void> {
+  async cancel(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.cancelPaymentUseCase.execute(id);
   }
 }
