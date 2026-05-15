@@ -7,7 +7,10 @@ import { PaymentsModule } from './contexts/payments/payments.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
+    }),
 
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
