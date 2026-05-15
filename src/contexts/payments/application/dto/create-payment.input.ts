@@ -7,5 +7,5 @@ export interface CreatePaymentInput {
   /** Merchant-assigned idempotency key. */
   externalReference: string;
   redirectUrl: string;
-  webhookUrl: string;
+  webhookUrl?: string;
 }
