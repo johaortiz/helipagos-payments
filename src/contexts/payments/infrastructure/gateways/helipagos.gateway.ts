@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import {
   CancelPaymentResult,
@@ -7,6 +8,7 @@ import {
   PaymentDetails,
   PaymentProviderGateway,
 } from '../../domain/gateways/payment-provider.gateway';
+
 import {
   HelipagosHttpClient,
   HelipagosUnavailableError,
@@ -14,7 +16,10 @@ import {
 
 @Injectable()
 export class HelipagosGateway extends PaymentProviderGateway {
-  constructor(private readonly httpClient: HelipagosHttpClient) {
+  constructor(
+    private readonly httpClient: HelipagosHttpClient,
+    private readonly configService: ConfigService,
+  ) {
     super();
   }
 
@@ -27,7 +32,9 @@ export class HelipagosGateway extends PaymentProviderGateway {
       descripcion: request.description,
       referencia_externa: request.externalReference,
       url_redirect: request.redirectUrl,
-      webhook: request.webhookUrl,
+      webhook:
+        request.webhookUrl ||
+        this.configService.get<string>('WEBHOOK_URL'),
       recargo: request.surcharge,
       fecha_2do_vto: request.secondExpirationDate,
       referencia_externa_2: request.secondaryReference,
@@ -54,8 +61,6 @@ export class HelipagosGateway extends PaymentProviderGateway {
       );
     }
 
-    // The provider returns history in ascending order — the last element
-    // represents the most recent state of the payment.
     const latest = results[results.length - 1];
 
     return {
@@ -76,6 +81,7 @@ export class HelipagosGateway extends PaymentProviderGateway {
 
   async cancelPayment(providerPaymentId: number): Promise<CancelPaymentResult> {
     const response = await this.httpClient.cancelPayment(providerPaymentId);
+
     return {
       success: response.status === 200,
       message: response.message,

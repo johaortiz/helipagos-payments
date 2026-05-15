@@ -43,7 +43,11 @@ export class CreatePaymentDto {
   @IsUrl()
   redirectUrl!: string;
 
-  @ApiPropertyOptional({ example: 'https://mystore.com/webhooks/helipagos' })
+  @ApiPropertyOptional({
+    example: 'https://mystore.com/webhooks/helipagos',
+    description:
+      'Optional webhook URL. Falls back to WEBHOOK_URL environment variable.',
+  })
   @IsUrl()
   @IsOptional()
   webhookUrl?: string;
