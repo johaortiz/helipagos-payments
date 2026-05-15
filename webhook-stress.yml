@@ -1,0 +1,63 @@
+config:
+  target: "https://aqueduct-dollop-gigabyte.ngrok-free.dev"
+  phases:
+    - name: "Warm up"
+      duration: 3
+      arrivalRate: 10
+    - name: "Stress"
+      duration: 5
+      arrivalRate: 50
+    - name: "Spike"
+      duration: 2
+      arrivalRate: 100
+
+scenarios:
+  - name: "PROCESADA - concurrencia mismo pago"
+    weight: 50
+    flow:
+      - post:
+          url: "/api/payments/webhook"
+          headers:
+            Content-Type: "application/json"
+          json:
+            id_sp: 706153
+            estado: "PROCESADA"
+            referencia_externa: "patitos-de-hule"
+            importe_abonado: "150000"
+
+  - name: "PROCESADA - duplicado"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/payments/webhook"
+          headers:
+            Content-Type: "application/json"
+          json:
+            id_sp: 706153
+            estado: "PROCESADA"
+            referencia_externa: "patitos-de-hule"
+            importe_abonado: "150000"
+
+  - name: "id_sp desconocido"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/payments/webhook"
+          headers:
+            Content-Type: "application/json"
+          json:
+            id_sp: 999999
+            estado: "PROCESADA"
+            referencia_externa: "unknown"
+
+  - name: "estado desconocido"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/payments/webhook"
+          headers:
+            Content-Type: "application/json"
+          json:
+            id_sp: 706153
+            estado: "ESTADO_INVALIDO"
+            referencia_externa: "patitos-de-hule"
