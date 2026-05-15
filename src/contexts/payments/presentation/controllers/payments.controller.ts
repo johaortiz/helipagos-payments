@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -21,7 +23,10 @@ import { HandlePaymentWebhookUseCase } from '../../application/uses-cases/handle
 import { CreatePaymentDto } from '../dto/create-payment.dto';
 import { PaymentResponseDto } from '../dto/payment-response.dto';
 import { PaymentWebhookDto } from '../dto/payment-webhook.dto';
+import { JwtAuthGuard } from 'src/contexts/auth/guards/jwt-auth.guard';
+import { Public } from 'src/contexts/auth/decorators/public.decorator';
 
+@UseGuards(JwtAuthGuard)
 @ApiTags('Payments')
 @Controller('payments')
 export class PaymentsController {
@@ -32,7 +37,7 @@ export class PaymentsController {
     private readonly handlePaymentWebhookUseCase: HandlePaymentWebhookUseCase,
   ) {}
 
-  // ── POST /payments ────────────────────────────────────────────────────────
+  // ── POST /payments
 
   @Post()
   @ApiBearerAuth()
@@ -46,13 +51,13 @@ export class PaymentsController {
       description: dto.description,
       externalReference: dto.externalReference,
       redirectUrl: dto.redirectUrl,
-      webhookUrl: dto.webhookUrl ?? '',
+      webhookUrl: dto.webhookUrl,
     });
 
     return PaymentResponseDto.fromCreateOutput(output, dto.description);
   }
 
-  // ── GET /payments/:id ─────────────────────────────────────────────────────
+  // ── GET /payments/:id
 
   @Get(':id')
   @ApiBearerAuth()
@@ -65,9 +70,9 @@ export class PaymentsController {
     return PaymentResponseDto.fromGetOutput(output);
   }
 
-  // ── POST /payments/webhook ────────────────────────────────────────────────
+  // ── POST /payments/webhook
   // Defined before :id routes so NestJS does not treat "webhook" as a path param.
-
+  @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Receive a payment status update from Helipagos' })
@@ -83,9 +88,9 @@ export class PaymentsController {
     });
   }
 
-  // ── POST /payments/:id/cancel ─────────────────────────────────────────────
+  // ── DELETE /payments/:id/cancel
 
-  @Post(':id/cancel')
+  @Delete(':id/cancel')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel a payment' })
