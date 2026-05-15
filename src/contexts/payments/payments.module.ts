@@ -1,6 +1,5 @@
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { CancelPaymentUseCase } from './application/uses-cases/cancel-payment.use-case';
@@ -16,11 +15,7 @@ import { TypeOrmPaymentRepository } from './infrastructure/persistence/repositor
 import { PaymentsController } from './presentation/controllers/payments.controller';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([PaymentOrmEntity]),
-    HttpModule,
-    JwtModule,
-  ],
+  imports: [TypeOrmModule.forFeature([PaymentOrmEntity]), HttpModule],
   controllers: [PaymentsController],
   providers: [
     //  Use cases
