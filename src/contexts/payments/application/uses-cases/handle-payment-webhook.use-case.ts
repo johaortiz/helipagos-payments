@@ -35,8 +35,10 @@ export class HandlePaymentWebhookUseCase {
     }
 
     try {
-      this.applyTransition(payment, input.estado);
-      await this.paymentRepository.update(payment);
+      const transitioned = this.applyTransition(payment, input.estado);
+      if (transitioned) {
+        await this.paymentRepository.update(payment);
+      }
     } catch (error) {
       // Domain exceptions (InvalidPaymentTransitionException,
       // PaymentAlreadyFinalizedException) are caught here — unlike other use
@@ -50,29 +52,29 @@ export class HandlePaymentWebhookUseCase {
     }
   }
 
-  private applyTransition(payment: Payment, estado: string): void {
+  private applyTransition(payment: Payment, estado: string): boolean {
     switch (estado) {
       case 'PROCESADA':
         payment.markAsProcessed();
-        break;
+        return true;
 
       case 'ACREDITADA':
         payment.markAsAccredited();
-        break;
+        return true;
 
       case 'VENCIDA':
         payment.expire();
-        break;
+        return true;
 
       case 'ANULADA':
       case 'RECHAZADA':
         payment.reject();
-        break;
+        return true;
 
       case 'DEVUELTA':
       case 'CONTRACARGO':
         payment.chargeback();
-        break;
+        return true;
 
       default:
         // Unknown estados are silently ignored. The provider may introduce new
@@ -81,6 +83,7 @@ export class HandlePaymentWebhookUseCase {
         console.warn(
           `[HandlePaymentWebhook] Unknown estado '${estado}' for payment ${payment.id}. Skipping.`,
         );
+        return false;
     }
   }
 }

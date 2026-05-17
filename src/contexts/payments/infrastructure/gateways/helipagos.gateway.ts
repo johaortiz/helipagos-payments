@@ -33,8 +33,7 @@ export class HelipagosGateway extends PaymentProviderGateway {
       referencia_externa: request.externalReference,
       url_redirect: request.redirectUrl,
       webhook:
-        request.webhookUrl ||
-        this.configService.get<string>('WEBHOOK_URL'),
+        request.webhookUrl || this.configService.get<string>('WEBHOOK_URL'),
       recargo: request.surcharge,
       fecha_2do_vto: request.secondExpirationDate,
       referencia_externa_2: request.secondaryReference,
