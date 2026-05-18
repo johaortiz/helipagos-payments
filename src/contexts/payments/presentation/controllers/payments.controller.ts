@@ -15,6 +15,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   ApiBearerAuth,
+  ApiHeader,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -84,8 +85,50 @@ export class PaymentsController {
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Receive a payment status update from Helipagos' })
-  @ApiResponse({ status: 200, description: 'Webhook received.' })
+  @ApiOperation({
+    summary: 'Receive a payment status update from Helipagos',
+    description:
+      'Webhook endpoint called by Helipagos whenever a payment status changes.\n\n' +
+      '**This endpoint always returns HTTP 200**, regardless of whether the payload was ' +
+      'processed or ignored. Any non-200 response would cause the provider to retry ' +
+      'the delivery indefinitely.\n\n' +
+      '**Optional secret-header validation**\n\n' +
+      'When `HELIPAGOS_WEBHOOK_SECRET` is set in the environment, the controller ' +
+      'validates an incoming header before passing the event to the domain layer:\n\n' +
+      '| Scenario | Behaviour |\n' +
+      '|---|---|\n' +
+      '| `HELIPAGOS_WEBHOOK_SECRET` not configured | Validation skipped — every request is processed |\n' +
+      '| Configured header **absent** in the request | Validation skipped — request is processed |\n' +
+      '| Configured header **present**, **correct** value | Request processed normally |\n' +
+      '| Configured header **present**, **wrong** value | Request silently ignored (HTTP 200, no processing) |\n\n' +
+      'The header name defaults to `x-webhook-secret` and can be overridden via ' +
+      '`HELIPAGOS_WEBHOOK_SECRET_HEADER`.',
+  })
+  @ApiHeader({
+    name: 'x-webhook-secret',
+    description:
+      'Optional shared secret for webhook authenticity verification. ' +
+      'Only checked when HELIPAGOS_WEBHOOK_SECRET is set in the environment. ' +
+      'The header name is configurable via HELIPAGOS_WEBHOOK_SECRET_HEADER ' +
+      '(default: x-webhook-secret). ' +
+      'If present and incorrect the request is ignored but HTTP 200 is still returned.',
+    required: false,
+    schema: { type: 'string', example: 'my-shared-secret' },
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Webhook acknowledged. ' +
+      'Possible outcomes: payload processed successfully; ignored because the payment ID ' +
+      'is unknown or the state transition is invalid; or silently rejected because the ' +
+      'secret header value did not match. ' +
+      'HTTP 200 is always returned to prevent provider retries.',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Request body failed validation (missing or invalid required fields).',
+  })
   async webhook(
     @Headers() headers: Record<string, string>,
     @Body() dto: PaymentWebhookDto,

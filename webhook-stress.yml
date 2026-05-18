@@ -10,10 +10,16 @@ config:
     - name: "Spike"
       duration: 2
       arrivalRate: 100
+  plugins:
+    # Enables statusCode assertions on every request.
+    # Install if needed: npm install -D @artillery/plugin-expect
+    expect: {}
 
 scenarios:
+  # ── Existing concurrent load ───────────────────────────────────────────────
+
   - name: "PROCESADA - concurrencia mismo pago"
-    weight: 50
+    weight: 30
     flow:
       - post:
           url: "/api/payments/webhook"
@@ -24,9 +30,11 @@ scenarios:
             estado: "PROCESADA"
             referencia_externa: "patitos-de-hule"
             importe_abonado: "150000"
+          expect:
+            - statusCode: 200
 
   - name: "PROCESADA - duplicado"
-    weight: 20
+    weight: 10
     flow:
       - post:
           url: "/api/payments/webhook"
@@ -37,9 +45,11 @@ scenarios:
             estado: "PROCESADA"
             referencia_externa: "patitos-de-hule"
             importe_abonado: "150000"
+          expect:
+            - statusCode: 200
 
   - name: "id_sp desconocido"
-    weight: 20
+    weight: 10
     flow:
       - post:
           url: "/api/payments/webhook"
@@ -49,9 +59,11 @@ scenarios:
             id_sp: 999999
             estado: "PROCESADA"
             referencia_externa: "unknown"
+          expect:
+            - statusCode: 200
 
   - name: "estado desconocido"
-    weight: 10
+    weight: 5
     flow:
       - post:
           url: "/api/payments/webhook"
@@ -61,3 +73,60 @@ scenarios:
             id_sp: 706153
             estado: "ESTADO_INVALIDO"
             referencia_externa: "patitos-de-hule"
+          expect:
+            - statusCode: 200
+
+  # ── Secret header validation ───────────────────────────────────────────────
+  # The endpoint contract guarantees HTTP 200 in all three cases below.
+  # Internal processing only occurs when the header is absent or correct.
+
+  - name: "SECRET válido - webhook procesado normalmente"
+    # Correct shared secret → validation passes → use case runs.
+    weight: 20
+    flow:
+      - post:
+          url: "/api/payments/webhook"
+          headers:
+            Content-Type: "application/json"
+            x-webhook-secret: "test-webhook-secret-xyz"
+          json:
+            id_sp: 706153
+            estado: "PROCESADA"
+            referencia_externa: "patitos-de-hule"
+            importe_abonado: "150000"
+          expect:
+            - statusCode: 200
+
+  - name: "SECRET inválido - webhook ignorado, siempre HTTP 200"
+    # Wrong secret value → controller returns early without calling the use case.
+    # HTTP 200 is still returned to prevent the provider from retrying.
+    weight: 15
+    flow:
+      - post:
+          url: "/api/payments/webhook"
+          headers:
+            Content-Type: "application/json"
+            x-webhook-secret: "valor-incorrecto"
+          json:
+            id_sp: 706153
+            estado: "PROCESADA"
+            referencia_externa: "patitos-de-hule"
+            importe_abonado: "150000"
+          expect:
+            - statusCode: 200
+
+  - name: "Sin header secret - validación omitida, webhook procesado"
+    # Header absent → validation skipped → use case runs as normal.
+    weight: 10
+    flow:
+      - post:
+          url: "/api/payments/webhook"
+          headers:
+            Content-Type: "application/json"
+          json:
+            id_sp: 706153
+            estado: "PROCESADA"
+            referencia_externa: "patitos-de-hule"
+            importe_abonado: "150000"
+          expect:
+            - statusCode: 200
