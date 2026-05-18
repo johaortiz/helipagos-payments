@@ -3,13 +3,16 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
+  Logger,
   Param,
   Post,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -31,11 +34,14 @@ import { Public } from 'src/contexts/auth/decorators/public.decorator';
 @ApiTags('Payments')
 @Controller('payments')
 export class PaymentsController {
+  private readonly logger = new Logger(PaymentsController.name);
+
   constructor(
     private readonly createPaymentUseCase: CreatePaymentUseCase,
     private readonly getPaymentUseCase: GetPaymentUseCase,
     private readonly cancelPaymentUseCase: CancelPaymentUseCase,
     private readonly handlePaymentWebhookUseCase: HandlePaymentWebhookUseCase,
+    private readonly configService: ConfigService,
   ) {}
 
   // ── POST /payments
@@ -80,7 +86,27 @@ export class PaymentsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Receive a payment status update from Helipagos' })
   @ApiResponse({ status: 200, description: 'Webhook received.' })
-  async webhook(@Body() dto: PaymentWebhookDto): Promise<void> {
+  async webhook(
+    @Headers() headers: Record<string, string>,
+    @Body() dto: PaymentWebhookDto,
+  ): Promise<void> {
+    const secret = this.configService.get<string>('HELIPAGOS_WEBHOOK_SECRET');
+
+    if (secret) {
+      const headerName = this.configService.get<string>(
+        'HELIPAGOS_WEBHOOK_SECRET_HEADER',
+        'x-webhook-secret',
+      );
+      const received = headers[headerName.toLowerCase()];
+
+      if (received !== undefined && received !== secret) {
+        this.logger.warn(
+          `Webhook secret mismatch — rejecting request (header: "${headerName}")`,
+        );
+        return;
+      }
+    }
+
     await this.handlePaymentWebhookUseCase.execute({
       id_sp: dto.id_sp,
       estado: dto.estado,
