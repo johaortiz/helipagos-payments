@@ -24,57 +24,57 @@ import { PaymentOrmEntity } from '../../contexts/payments/infrastructure/persist
 import { PaymentSeeder } from './seeders/payment.seeder';
 import { UserSeeder } from './seeders/user.seeder';
 
-// ─── Production guard 
+// ─── Production guard
 
 const NODE_ENV = process.env.NODE_ENV ?? 'development';
 const SEED_FORCE = process.env.SEED_FORCE === 'true';
 
 if (NODE_ENV === 'production' && !SEED_FORCE) {
-    console.error(
-        '\n[Seed] Refusing to run in production environment.\n' +
-        '       Set SEED_FORCE=true to override (use with extreme caution).\n',
-    );
-    process.exit(1);
+  console.error(
+    '\n[Seed] Refusing to run in production environment.\n' +
+      '       Set SEED_FORCE=true to override (use with extreme caution).\n',
+  );
+  process.exit(1);
 }
 
-// ─── DataSource 
+// ─── DataSource
 
 const dataSource = new DataSource({
-    type: 'postgres',
-    host: process.env.DB_HOST ?? 'localhost',
-    port: Number(process.env.DB_PORT ?? 5432),
-    username: process.env.DB_USERNAME ?? 'postgres',
-    password: process.env.DB_PASSWORD ?? 'postgres',
-    database: process.env.DB_NAME ?? 'helipagos',
-    entities: [PaymentOrmEntity],
-    synchronize: false,
-    logging: false,
+  type: 'postgres',
+  host: process.env.DB_HOST ?? 'localhost',
+  port: Number(process.env.DB_PORT ?? 5432),
+  username: process.env.DB_USERNAME ?? 'postgres',
+  password: process.env.DB_PASSWORD ?? 'postgres',
+  database: process.env.DB_NAME ?? 'helipagos',
+  entities: [PaymentOrmEntity],
+  synchronize: false,
+  logging: false,
 });
 
-// ─── Runner 
+// ─── Runner
 
 async function run(): Promise<void> {
-    const db = dataSource.options.database as string;
+  const db = dataSource.options.database as string;
 
-    console.log(
-        `\n[Seed] Environment : ${NODE_ENV}` +
-        `\n[Seed] Database    : ${db}` +
-        `\n[Seed] Starting...\n`,
-    );
+  console.log(
+    `\n[Seed] Environment : ${NODE_ENV}` +
+      `\n[Seed] Database    : ${db}` +
+      `\n[Seed] Starting...\n`,
+  );
 
-    await dataSource.initialize();
+  await dataSource.initialize();
 
-    try {
-        new UserSeeder().run();
-        await new PaymentSeeder(dataSource).run();
+  try {
+    new UserSeeder().run();
+    await new PaymentSeeder(dataSource).run();
 
-        console.log('[Seed] All seeders completed successfully.\n');
-    } finally {
-        await dataSource.destroy();
-    }
+    console.log('[Seed] All seeders completed successfully.\n');
+  } finally {
+    await dataSource.destroy();
+  }
 }
 
 run().catch((err: unknown) => {
-    console.error('\n[Seed] Fatal error:', err);
-    process.exit(1);
+  console.error('\n[Seed] Fatal error:', err);
+  process.exit(1);
 });
