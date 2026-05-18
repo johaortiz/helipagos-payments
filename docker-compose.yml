@@ -1,0 +1,61 @@
+# Production stack
+#
+# Usage:
+#   docker compose up --build
+#
+# Prerequisites:
+#   cp .env.example .env   # then fill in your values
+#
+# The app service reads variables from .env (optional — defaults are provided).
+# DB_HOST is always overridden to "db" so it resolves inside the Docker network.
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL database
+  # ─────────────────────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: helipagos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-helipagos}
+    ports:
+      # Expose to host for local tools (pgAdmin, DBeaver, etc.)
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # $$VAR escapes Docker Compose interpolation — resolved inside the container
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # NestJS application (production build)
+  # ─────────────────────────────────────────────────────────────────────────────
+  app:
+    container_name: helipagos-app
+    build:
+      context: .
+      target: production
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Always override with Docker-specific values regardless of .env contents
+      NODE_ENV: production
+      DB_HOST: db       # must match the compose service name above
+      DB_PORT: "5432"   # internal Docker network port
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

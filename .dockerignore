@@ -1,0 +1,52 @@
+# ── Dependencies & build artifacts ────────────────────────────────────────────
+node_modules
+dist
+coverage
+.nyc_output
+
+# ── Environment / secrets (inject at runtime, never bake into the image) ──────
+.env*
+!.env.example
+
+# ── Version control ───────────────────────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+
+# ── Editor & OS ───────────────────────────────────────────────────────────────
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Docker files (not needed inside the image) ────────────────────────────────
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# ── Test files ────────────────────────────────────────────────────────────────
+test
+**/*.spec.ts
+**/*.test.ts
+
+# ── Dev tooling configuration ─────────────────────────────────────────────────
+.husky
+eslint.config*
+.eslintrc*
+.prettierrc*
+.prettierignore
+commitlint.config*
+tsconfig.seed.json
+
+# ── Documentation ─────────────────────────────────────────────────────────────
+README.md
+CHANGELOG*
+*.md
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs
+npm-debug.log*
+pnpm-debug.log*

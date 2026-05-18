@@ -1,0 +1,47 @@
+# Development overrides — merged on top of docker-compose.yml.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# Changes from production config:
+#   - Builds the "development" Dockerfile target (ts-node hot-reload)
+#   - Bind-mounts the project source for live code changes
+#   - Anonymous volume shadows node_modules so the host copy never leaks in
+#   - Loads .env.development credentials (falls back to .env)
+#   - Sets NODE_ENV=development
+
+services:
+  app:
+    container_name: helipagos-app-dev
+    build:
+      context: .
+      target: development
+    env_file:
+      - path: .env.development
+        required: false
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: development
+      # ── Database (Docker internal) ────────────────────────────────────────
+      # These override any values loaded from env_file (.env.development).
+      # The postgres container is initialised with these same defaults
+      # (see docker-compose.yml: POSTGRES_USER/PASSWORD/DB use :-postgres/helipagos).
+      # Your local .env.development credentials (e.g. DB_USERNAME=apstris,
+      # DB_PASSWORD=<empty>) are for the host machine only and must NOT reach
+      # the in-Docker postgres.
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: helipagos
+      # pnpm 11 runs a deps-status check before every script. CI=true tells
+      # pnpm to proceed non-interactively if it ever decides a reinstall is
+      # needed (e.g. after a lockfile update), instead of blocking on a TTY
+      # prompt (ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY).
+      CI: "true"
+    volumes:
+      # Bind-mount source so ts-node picks up changes without rebuilding
+      - .:/app
+      # Prevent the host node_modules from shadowing the container's copy
+      - /app/node_modules
