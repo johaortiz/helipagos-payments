@@ -1,2 +1,5 @@
-allowBuilds:
-  better-sqlite3: false
+# pnpm 11+ project-level settings (replaces the old "pnpm" field in package.json)
+#
+# Empty array: no package in this project is allowed to run install scripts.
+# This satisfies ERR_PNPM_IGNORED_BUILDS without requiring interactive approval.
+onlyBuiltDependencies: []
