@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
+import { PaymentDomainError } from '../../payments/domain/entities/payment.entity';
 import { InvalidPaymentTransitionException } from '../../payments/domain/exceptions/invalid-payment-transition.exception';
 import { PaymentAlreadyFinalizedException } from '../../payments/domain/exceptions/payment-already-finalized.exception';
 import { PaymentNotFoundException } from '../../payments/domain/exceptions/payment-not-found-exception';
@@ -59,11 +60,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const res = exception.getResponse();
-      const message =
-        typeof res === 'string'
-          ? res
-          : ((res as Record<string, unknown>)['message']?.toString() ??
-            exception.message);
+      let message: string;
+      if (typeof res === 'string') {
+        message = res;
+      } else {
+        const body = res as Record<string, unknown>;
+        const raw = body['message'];
+        if (Array.isArray(raw)) {
+          message = (raw as string[]).join(', ');
+        } else {
+          message = raw?.toString() ?? exception.message;
+        }
+      }
       return { statusCode: status, error: exception.constructor.name, message };
     }
 
@@ -87,6 +95,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       return {
         statusCode: HttpStatus.CONFLICT,
         error: 'PaymentAlreadyFinalizedException',
+        message: exception.message,
+      };
+    }
+
+    // Generic domain rule violation — placed after specific payment exceptions
+    // so they are never shadowed by this broader guard.
+    if (exception instanceof PaymentDomainError) {
+      return {
+        statusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+        error: 'PaymentDomainError',
         message: exception.message,
       };
     }
