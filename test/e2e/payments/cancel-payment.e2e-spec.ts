@@ -53,7 +53,7 @@ function buildPaymentBody(externalReference: string) {
 
 // ─── Suite ────────────────────────────────────────────────────────────────────
 
-describe('DELETE /api/payments/:id/cancel', () => {
+describe('DELETE /api/payments/:id', () => {
   let app: INestApplication;
   let moduleRef: TestingModule;
   let gateway: ReturnType<typeof getProviderGatewayMock>;
@@ -83,7 +83,7 @@ describe('DELETE /api/payments/:id/cancel', () => {
 
   // ── 1 ─────────────────────────────────────────────────────────────────────
 
-  it('should return 204 when cancelling a CREATED payment', async () => {
+  it('should return 200 when cancelling a CREATED payment', async () => {
     const providerPaymentId = 400001;
     gateway.createPayment.mockResolvedValueOnce(
       buildGatewayResult(providerPaymentId),
@@ -102,10 +102,10 @@ describe('DELETE /api/payments/:id/cancel', () => {
     const { id } = createRes.body as PaymentResponseBody;
 
     const cancelRes = await request(server)
-      .delete(`/api/payments/${id}/cancel`)
+      .delete(`/api/payments/${id}`)
       .set('Authorization', `Bearer ${authToken}`);
 
-    expect(cancelRes.status).toBe(204);
+    expect(cancelRes.status).toBe(200);
   });
 
   // ── 2 ─────────────────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ describe('DELETE /api/payments/:id/cancel', () => {
 
     // Now cancel — must fail with 422 (domain rule: cannot cancel PROCESSED).
     const cancelRes = await request(server)
-      .delete(`/api/payments/${id}/cancel`)
+      .delete(`/api/payments/${id}`)
       .set('Authorization', `Bearer ${authToken}`);
 
     expect(cancelRes.status).toBe(422);
@@ -156,7 +156,7 @@ describe('DELETE /api/payments/:id/cancel', () => {
 
   it('should return 404 when the payment does not exist', async () => {
     const cancelRes = await request(server)
-      .delete('/api/payments/00000000-0000-4000-8000-000000000000/cancel')
+      .delete('/api/payments/00000000-0000-4000-8000-000000000000')
       .set('Authorization', `Bearer ${authToken}`);
 
     expect(cancelRes.status).toBe(404);
@@ -170,7 +170,7 @@ describe('DELETE /api/payments/:id/cancel', () => {
 
   it('should return 401 when no JWT is provided', async () => {
     const cancelRes = await request(server).delete(
-      '/api/payments/00000000-0000-4000-8000-000000000001/cancel',
+      '/api/payments/00000000-0000-4000-8000-000000000001',
     );
 
     expect(cancelRes.status).toBe(401);

@@ -257,13 +257,13 @@ export class PaymentsController {
     });
   }
 
-  // ── DELETE /payments/:id/cancel
+  // ── DELETE /payments/:id
 
-  @Delete(':id/cancel')
-  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel a payment' })
-  @ApiResponse({ status: 204, description: 'Payment cancelled.' })
+  @ApiResponse({ status: 200, description: 'Payment cancelled.' })
   @ApiResponse({ status: 404, description: 'Payment not found.' })
   @ApiResponse({
     status: 422,
