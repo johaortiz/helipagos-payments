@@ -5,7 +5,10 @@ import { TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 
 import { CreatePaymentResult } from '../../../src/contexts/payments/domain/gateways/payment-provider.gateway';
-import { HelipagosUnavailableError } from '../../../src/contexts/payments/infrastructure/http/helipagos-http.client';
+import {
+  HelipagosAuthenticationError,
+  HelipagosUnavailableError,
+} from '../../../src/contexts/payments/infrastructure/http/helipagos-http.client';
 import {
   createTestApp,
   getProviderGatewayMock,
@@ -192,6 +195,62 @@ describe('POST /api/payments', () => {
       statusCode: 503,
       error: 'HelipagosUnavailableError',
     });
+  });
+
+  // ── Scenario 5b
+
+  it('should return 503 with HelipagosAuthenticationError when provider rejects authentication', async () => {
+    gateway.createPayment.mockRejectedValueOnce(
+      new HelipagosAuthenticationError(),
+    );
+
+    const res = await request(server)
+      .post('/api/payments')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(buildValidBody('order-e2e-auth-err-001'));
+
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({
+      statusCode: 503,
+      error: 'HelipagosAuthenticationError',
+      message: 'Payment provider authentication failed.',
+    });
+    // Never expose stack traces in the response
+    expect(res.body).not.toHaveProperty('stack');
+  });
+
+  // ── Scenario 5c
+
+  it('should retry provider on second POST when previous attempt left a PENDING payment', async () => {
+    const externalReference = 'order-e2e-retry-recovery-001';
+    const result = buildGatewayResult(200099);
+
+    // First call: provider authentication fails — 503, local PENDING payment created.
+    gateway.createPayment.mockRejectedValueOnce(
+      new HelipagosAuthenticationError(),
+    );
+
+    const firstRes = await request(server)
+      .post('/api/payments')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(buildValidBody(externalReference));
+
+    expect(firstRes.status).toBe(503);
+
+    // Second call: same externalReference, provider now succeeds — uses existing PENDING record.
+    gateway.createPayment.mockResolvedValueOnce(result);
+
+    const secondRes = await request(server)
+      .post('/api/payments')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(buildValidBody(externalReference));
+
+    expect(secondRes.status).toBe(201);
+    const body = secondRes.body as PaymentResponseBody;
+    expect(body.externalPaymentId).toBe(result.providerPaymentId);
+    expect(body.externalReference).toBe(externalReference);
+    // Provider called exactly once per attempt (no extra calls)
+    expect(gateway.createPayment).toHaveBeenCalledTimes(2);
   });
 
   // ── Scenario 6

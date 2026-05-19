@@ -12,7 +12,11 @@ import { PaymentDomainError } from '../../payments/domain/exceptions/payment-dom
 import { InvalidPaymentTransitionException } from '../../payments/domain/exceptions/invalid-payment-transition.exception';
 import { PaymentAlreadyFinalizedException } from '../../payments/domain/exceptions/payment-already-finalized.exception';
 import { PaymentNotFoundException } from '../../payments/domain/exceptions/payment-not-found-exception';
-import { HelipagosUnavailableError } from '../../payments/infrastructure/http/helipagos-http.client';
+import {
+  HelipagosAuthenticationError,
+  HelipagosRejectedRequestError,
+  HelipagosUnavailableError,
+} from '../../payments/infrastructure/http/helipagos-http.client';
 
 interface ErrorResponse {
   statusCode: HttpStatus;
@@ -109,10 +113,26 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       };
     }
 
+    if (exception instanceof HelipagosAuthenticationError) {
+      return {
+        statusCode: HttpStatus.SERVICE_UNAVAILABLE,
+        error: 'HelipagosAuthenticationError',
+        message: exception.message,
+      };
+    }
+
     if (exception instanceof HelipagosUnavailableError) {
       return {
         statusCode: HttpStatus.SERVICE_UNAVAILABLE,
         error: 'HelipagosUnavailableError',
+        message: exception.message,
+      };
+    }
+
+    if (exception instanceof HelipagosRejectedRequestError) {
+      return {
+        statusCode: HttpStatus.BAD_GATEWAY,
+        error: 'HelipagosRejectedRequestError',
         message: exception.message,
       };
     }

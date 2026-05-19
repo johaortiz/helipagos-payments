@@ -1,16 +1,33 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { isAxiosError } from 'axios';
 import axiosRetry from 'axios-retry';
 import { firstValueFrom } from 'rxjs';
 
-// ─── Typed error ──────────────────────────────────────────────────────────────
+// ─── Typed provider errors ───────────────────────────────────────────────────
 
 export class HelipagosUnavailableError extends Error {
   constructor(cause?: unknown) {
-    super('Helipagos service is unavailable. Please try again later.');
+    super('Payment provider unavailable.');
     this.name = 'HelipagosUnavailableError';
     if (cause instanceof Error) this.cause = cause;
+  }
+}
+
+/** Thrown when Helipagos returns 401 or 403 (bad/expired Bearer token). */
+export class HelipagosAuthenticationError extends Error {
+  constructor() {
+    super('Payment provider authentication failed.');
+    this.name = 'HelipagosAuthenticationError';
+  }
+}
+
+/** Thrown when Helipagos returns 400 or 422 (our request was malformed). */
+export class HelipagosRejectedRequestError extends Error {
+  constructor() {
+    super('Payment provider rejected the request.');
+    this.name = 'HelipagosRejectedRequestError';
   }
 }
 
@@ -175,8 +192,41 @@ export class HelipagosHttpClient {
     };
   }
 
-  private wrapError(error: unknown): HelipagosUnavailableError {
-    this.logger.error('Helipagos request failed', error);
+  private wrapError(
+    error: unknown,
+  ):
+    | HelipagosUnavailableError
+    | HelipagosAuthenticationError
+    | HelipagosRejectedRequestError {
+    if (isAxiosError(error)) {
+      const status = error.response?.status;
+      const method = (error.config?.method ?? 'UNKNOWN').toUpperCase();
+      const rawUrl = error.config?.url ?? 'unknown';
+      let path = rawUrl;
+      try {
+        path = new URL(rawUrl).pathname;
+      } catch {
+        // rawUrl may already be a relative path
+      }
+      const code = error.code ?? 'UNKNOWN';
+      const logLine = `Helipagos request failed — ${method} ${path} — status=${status ?? 'none'} — code=${code}`;
+
+      if (status === 401 || status === 403) {
+        this.logger.warn(logLine);
+        return new HelipagosAuthenticationError();
+      }
+
+      if (status === 400 || status === 422) {
+        this.logger.warn(logLine);
+        return new HelipagosRejectedRequestError();
+      }
+
+      this.logger.error(logLine);
+      return new HelipagosUnavailableError();
+    }
+
+    const msg = error instanceof Error ? error.message : String(error);
+    this.logger.error(`Helipagos request failed — ${msg}`);
     return new HelipagosUnavailableError(error);
   }
 }

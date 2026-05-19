@@ -57,7 +57,18 @@ export class PaymentsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new payment' })
   @ApiResponse({ status: 201, type: PaymentResponseDto })
-  @ApiResponse({ status: 503, description: 'Payment provider unavailable.' })
+  @ApiResponse({
+    status: 503,
+    description:
+      'Payment provider unavailable or authentication failed. ' +
+      'A local PENDING payment was created and can be retried by resubmitting ' +
+      'a POST with the same externalReference once the provider is reachable.',
+  })
+  @ApiResponse({
+    status: 502,
+    description:
+      'Payment provider rejected the request (invalid payload sent upstream).',
+  })
   async create(@Body() dto: CreatePaymentDto): Promise<PaymentResponseDto> {
     const output = await this.createPaymentUseCase.execute({
       amount: dto.amount,

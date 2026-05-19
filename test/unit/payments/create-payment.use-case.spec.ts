@@ -3,7 +3,14 @@ import { CreatePaymentUseCase } from '../../../src/contexts/payments/application
 import { Payment } from '../../../src/contexts/payments/domain/entities/payment.entity';
 import { PaymentStatus } from '../../../src/contexts/payments/domain/enums/payment-status.enum';
 import { CreatePaymentResult } from '../../../src/contexts/payments/domain/gateways/payment-provider.gateway';
-import { createCreatedPaymentFixture } from '../../fixtures/payments/payment.fixture';
+import {
+  HelipagosAuthenticationError,
+  HelipagosUnavailableError,
+} from '../../../src/contexts/payments/infrastructure/http/helipagos-http.client';
+import {
+  createCreatedPaymentFixture,
+  createPendingPaymentFixture,
+} from '../../fixtures/payments/payment.fixture';
 import { createMockProviderGateway } from '../../mocks/helipagos-http.client.mock';
 import { createMockPaymentRepository } from '../../mocks/payment-repository.mock';
 
@@ -41,8 +48,8 @@ describe('CreatePaymentUseCase', () => {
     providerGateway = createMockProviderGateway();
     useCase = new CreatePaymentUseCase(repository, providerGateway);
 
-    // Default happy-path stubs
-    repository.existsByExternalReference.mockResolvedValue(false);
+    // Default happy-path stubs (new payment — no existing record)
+    repository.findByExternalReference.mockResolvedValue(null);
     providerGateway.createPayment.mockResolvedValue(PROVIDER_RESULT);
   });
 
@@ -101,12 +108,11 @@ describe('CreatePaymentUseCase', () => {
 
   // ── 4 ────────────────────────────────────────────────────────────────────────
 
-  it('should return the existing payment when externalReference is duplicate', async () => {
+  it('should return the existing payment when externalReference is duplicate and provider id is set', async () => {
     const existingPayment = createCreatedPaymentFixture({
       externalReference: VALID_INPUT.externalReference,
     });
 
-    repository.existsByExternalReference.mockResolvedValue(true);
     repository.findByExternalReference.mockResolvedValue(existingPayment);
 
     const output = await useCase.execute(VALID_INPUT);
@@ -119,12 +125,11 @@ describe('CreatePaymentUseCase', () => {
 
   // ── 5 ────────────────────────────────────────────────────────────────────────
 
-  it('should NOT call the provider when the payment is idempotent', async () => {
+  it('should NOT call the provider when the payment already has an externalPaymentId', async () => {
     const existingPayment = createCreatedPaymentFixture({
       externalReference: VALID_INPUT.externalReference,
     });
 
-    repository.existsByExternalReference.mockResolvedValue(true);
     repository.findByExternalReference.mockResolvedValue(existingPayment);
 
     await useCase.execute(VALID_INPUT);
@@ -193,23 +198,24 @@ describe('CreatePaymentUseCase', () => {
 
   // ── 10 ───────────────────────────────────────────────────────────────────────
 
-  it('should call existsByExternalReference before save', async () => {
+  it('should call findByExternalReference before save on new payment', async () => {
     await useCase.execute(VALID_INPUT);
 
-    expect(repository.existsByExternalReference).toHaveBeenCalledTimes(1);
+    expect(repository.findByExternalReference).toHaveBeenCalledTimes(1);
     expect(
-      repository.existsByExternalReference.mock.invocationCallOrder[0],
+      repository.findByExternalReference.mock.invocationCallOrder[0],
     ).toBeLessThan(repository.save.mock.invocationCallOrder[0]);
   });
 
   // ── 11 ───────────────────────────────────────────────────────────────────────
 
-  it('should NOT call findByExternalReference when payment does not exist', async () => {
-    repository.existsByExternalReference.mockResolvedValue(false);
-
+  it('should call findByExternalReference once per execute call', async () => {
     await useCase.execute(VALID_INPUT);
 
-    expect(repository.findByExternalReference).not.toHaveBeenCalled();
+    expect(repository.findByExternalReference).toHaveBeenCalledTimes(1);
+    expect(repository.findByExternalReference).toHaveBeenCalledWith(
+      VALID_INPUT.externalReference,
+    );
   });
 
   // ── 12 ───────────────────────────────────────────────────────────────────────
@@ -253,5 +259,73 @@ describe('CreatePaymentUseCase', () => {
     expect(output.externalPaymentId).toBe(0);
     expect(output.status).toBe(PaymentStatus.CREATED);
     expect(repository.update).toHaveBeenCalledTimes(1);
+  });
+
+  // ── 15 ───────────────────────────────────────────────────────────────────────────
+
+  it('should retry provider for PENDING payment with null externalPaymentId', async () => {
+    const pendingPayment = createPendingPaymentFixture({
+      externalReference: VALID_INPUT.externalReference,
+    });
+
+    repository.findByExternalReference.mockResolvedValue(pendingPayment);
+
+    const output = await useCase.execute(VALID_INPUT);
+
+    // Same local record reused — no duplicate created
+    expect(output.id).toBe(pendingPayment.id);
+    expect(output.externalPaymentId).toBe(PROVIDER_RESULT.providerPaymentId);
+    expect(output.status).toBe(PaymentStatus.CREATED);
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(repository.update).toHaveBeenCalledTimes(1);
+    expect(providerGateway.createPayment).toHaveBeenCalledTimes(1);
+  });
+
+  // ── 16 ───────────────────────────────────────────────────────────────────────────
+
+  it('should propagate error and keep payment PENDING when retry also fails', async () => {
+    const pendingPayment = createPendingPaymentFixture({
+      externalReference: VALID_INPUT.externalReference,
+    });
+
+    repository.findByExternalReference.mockResolvedValue(pendingPayment);
+    providerGateway.createPayment.mockRejectedValue(
+      new HelipagosAuthenticationError(),
+    );
+
+    await expect(useCase.execute(VALID_INPUT)).rejects.toBeInstanceOf(
+      HelipagosAuthenticationError,
+    );
+    // No duplicate created and no partial update written
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  // ── 17 ───────────────────────────────────────────────────────────────────────────
+
+  it('should propagate HelipagosAuthenticationError thrown by the provider', async () => {
+    providerGateway.createPayment.mockRejectedValue(
+      new HelipagosAuthenticationError(),
+    );
+
+    await expect(useCase.execute(VALID_INPUT)).rejects.toBeInstanceOf(
+      HelipagosAuthenticationError,
+    );
+    expect(repository.save).toHaveBeenCalledTimes(1);
+    expect(repository.update).not.toHaveBeenCalled();
+  });
+
+  // ── 18 ───────────────────────────────────────────────────────────────────────────
+
+  it('should propagate HelipagosUnavailableError and keep local payment PENDING', async () => {
+    providerGateway.createPayment.mockRejectedValue(
+      new HelipagosUnavailableError(),
+    );
+
+    await expect(useCase.execute(VALID_INPUT)).rejects.toBeInstanceOf(
+      HelipagosUnavailableError,
+    );
+    expect(repository.save).toHaveBeenCalledTimes(1);
+    expect(repository.update).not.toHaveBeenCalled();
   });
 });

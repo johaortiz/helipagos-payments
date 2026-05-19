@@ -16,19 +16,24 @@ export class CreatePaymentUseCase {
   ) {}
 
   async execute(input: CreatePaymentInput): Promise<CreatePaymentOutput> {
-    // ── Idempotency check ─────────────────────────────────────────────────────
-    const exists = await this.paymentRepository.existsByExternalReference(
+    // ── Idempotency / recovery check ──────────────────────────────────────────
+    const existing = await this.paymentRepository.findByExternalReference(
       input.externalReference,
     );
 
-    if (exists) {
-      const existing = await this.paymentRepository.findByExternalReference(
-        input.externalReference,
-      );
-      return this.toOutput(existing!);
+    if (existing) {
+      // Provider creation was fully completed — return idempotently.
+      if (existing.externalPaymentId !== null) {
+        return this.toOutput(existing);
+      }
+
+      // PENDING with no externalPaymentId: the previous attempt created the
+      // local record but the provider call failed. Retry the provider using
+      // the same local payment so no duplicate record is created.
+      return this.callProviderAndUpdate(existing, input);
     }
 
-    // ── Create Payment in PENDING state ───────────────────────────────────────
+    // ── New payment: persist PENDING before calling the provider ──────────────
     const now = new Date();
     const payment = new Payment({
       id: randomUUID(),
@@ -47,11 +52,24 @@ export class CreatePaymentUseCase {
 
     // Persist before calling the provider so an idempotency record exists even
     // on gateway failure. A PENDING payment left in the DB is intentional:
-    // it prevents double-charging the payer on retries and can be reconciled
-    // by a background job. The error is propagated to the controller as-is.
+    // subsequent POST requests with the same externalReference will retry the
+    // provider against this record instead of creating a duplicate.
     await this.paymentRepository.save(payment);
 
-    // ── Call provider ─────────────────────────────────────────────────────────
+    return this.callProviderAndUpdate(payment, input);
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────────
+
+  /**
+   * Calls the provider, marks the payment as created, persists the update,
+   * and returns the output DTO.  Throws the provider error as-is on failure
+   * so the caller (new-payment path or retry path) propagates it cleanly.
+   */
+  private async callProviderAndUpdate(
+    payment: Payment,
+    input: CreatePaymentInput,
+  ): Promise<CreatePaymentOutput> {
     const result = await this.providerGateway.createPayment({
       amount: input.amount,
       expirationDate: input.expirationDate,
@@ -64,7 +82,6 @@ export class CreatePaymentUseCase {
       secondaryReference: input.secondaryReference,
     });
 
-    // ── Confirm creation and persist updated state ────────────────────────────
     payment.markAsCreated(
       result.providerPaymentId,
       result.checkoutUrl,
