@@ -2,10 +2,17 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
+// Partial unique index: allows multiple NULL rows while enforcing uniqueness
+// for any non-null provider ID (Helipagos id_sp).
+@Index('payments_external_payment_id_unique_idx', ['externalPaymentId'], {
+  unique: true,
+  where: '"external_payment_id" IS NOT NULL',
+})
 @Entity('payments')
 export class PaymentOrmEntity {
   @PrimaryColumn('uuid')

@@ -33,16 +33,18 @@ interface PaymentResponseBody {
 
 // ─── Shared test data
 
-const VALID_GATEWAY_RESULT: CreatePaymentResult = {
-  providerPaymentId: 987654,
-  status: 'GENERADA',
-  checkoutUrl: 'https://checkout.helipagos.com/pay/987654',
-  shortUrl: 'https://hpg.ar/abc123',
-  barcode: '9876543210123',
-  expirationDate: '2026-12-31',
-  amount: 150000,
-  createdAt: '2026-05-17T00:00:00.000Z',
-};
+function buildGatewayResult(providerPaymentId: number): CreatePaymentResult {
+  return {
+    providerPaymentId,
+    status: 'GENERADA',
+    checkoutUrl: `https://checkout.helipagos.com/pay/${providerPaymentId}`,
+    shortUrl: 'https://hpg.ar/abc123',
+    barcode: '9876543210123',
+    expirationDate: '2026-12-31',
+    amount: 150000,
+    createdAt: '2026-05-17T00:00:00.000Z',
+  };
+}
 
 function buildValidBody(externalReference: string) {
   return {
@@ -88,7 +90,8 @@ describe('POST /api/payments', () => {
   // ── Scenario 1
 
   it('should return 201 with payment data on valid request', async () => {
-    gateway.createPayment.mockResolvedValueOnce(VALID_GATEWAY_RESULT);
+    const result = buildGatewayResult(200001);
+    gateway.createPayment.mockResolvedValueOnce(result);
 
     const body = buildValidBody('order-e2e-create-001');
 
@@ -99,12 +102,12 @@ describe('POST /api/payments', () => {
 
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({
-      externalPaymentId: VALID_GATEWAY_RESULT.providerPaymentId,
+      externalPaymentId: result.providerPaymentId,
       externalReference: body.externalReference,
       amount: body.amount,
       description: body.description,
       status: 'GENERADA', // PaymentStatus.CREATED
-      checkoutUrl: VALID_GATEWAY_RESULT.checkoutUrl,
+      checkoutUrl: result.checkoutUrl,
     });
     const resBody = res.body as PaymentResponseBody;
     expect(resBody.id).toBeDefined();
@@ -146,7 +149,7 @@ describe('POST /api/payments', () => {
   // ── Scenario 4
 
   it('should return 201 with the same payment on duplicate externalReference (idempotency)', async () => {
-    gateway.createPayment.mockResolvedValueOnce(VALID_GATEWAY_RESULT);
+    gateway.createPayment.mockResolvedValueOnce(buildGatewayResult(200004));
 
     const body = buildValidBody('order-e2e-idempotent-001');
 
@@ -220,7 +223,7 @@ describe('POST /api/payments', () => {
   // ── Scenario 8
 
   it('should forward surcharge, secondExpirationDate and secondaryReference to the provider gateway', async () => {
-    gateway.createPayment.mockResolvedValueOnce(VALID_GATEWAY_RESULT);
+    gateway.createPayment.mockResolvedValueOnce(buildGatewayResult(200008));
 
     const body = {
       ...buildValidBody('order-e2e-optional-fields-001'),
