@@ -12,8 +12,13 @@ import {
 } from 'class-validator';
 
 export class CreatePaymentDto {
-  /** Amount in cents (e.g. 1500 = $15.00). */
-  @ApiProperty({ example: 150000, description: 'Amount in cents.' })
+  /** Amount in cents (e.g. 15023 = $150.23). */
+  @ApiProperty({
+    example: 15023,
+    description:
+      'Payment amount expressed as an integer number of cents (e.g. 15023 = $150.23). ' +
+      'Decimal values are not accepted.',
+  })
   @IsInt()
   @IsPositive()
   amount!: number;
@@ -53,7 +58,12 @@ export class CreatePaymentDto {
   webhookUrl?: string;
 
   /** Optional surcharge in cents applied to the payment. */
-  @ApiPropertyOptional({ example: 500 })
+  @ApiPropertyOptional({
+    example: 500,
+    description:
+      'Optional surcharge expressed as an integer number of cents (e.g. 500 = $5.00). ' +
+      'Decimal values are not accepted.',
+  })
   @IsNumber()
   @IsPositive()
   @IsOptional()

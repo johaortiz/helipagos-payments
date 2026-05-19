@@ -14,7 +14,10 @@ export class PaymentResponseDto {
   @ApiProperty({ example: 'order-abc-123' })
   externalReference!: string;
 
-  @ApiProperty({ example: 150000, description: 'Amount in cents.' })
+  @ApiProperty({
+    example: 15023,
+    description: 'Payment amount in integer cents (e.g. 15023 = $150.23).',
+  })
   amount!: number;
 
   @ApiProperty({ example: 'Monthly subscription payment.' })
