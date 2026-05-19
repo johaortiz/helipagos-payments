@@ -1,5 +1,5 @@
 import { CancelPaymentUseCase } from '../../../src/contexts/payments/application/uses-cases/cancel-payment.use-case';
-import { PaymentDomainError } from '../../../src/contexts/payments/domain/entities/payment.entity';
+import { PaymentDomainError } from '../../../src/contexts/payments/domain/exceptions/payment-domain.error';
 import { PaymentStatus } from '../../../src/contexts/payments/domain/enums/payment-status.enum';
 import { PaymentNotFoundException } from '../../../src/contexts/payments/domain/exceptions/payment-not-found-exception';
 import {
