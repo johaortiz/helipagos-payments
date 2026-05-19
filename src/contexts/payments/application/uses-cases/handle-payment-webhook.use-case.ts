@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 
+import { PaymentAlreadyFinalizedException } from '../../domain/exceptions/payment-already-finalized.exception';
+import { InvalidPaymentTransitionException } from '../../domain/exceptions/invalid-payment-transition.exception';
+import { PaymentDomainError } from '../../domain/exceptions/payment-domain.error';
 import { Payment } from '../../domain/entities/payment.entity';
 import { PaymentRepository } from '../../domain/repositories/payment.repository';
 import { PaymentWebhookInput } from '../dto/payment-webhook.input';
@@ -42,15 +45,30 @@ export class HandlePaymentWebhookUseCase {
         await this.paymentRepository.update(payment);
       }
     } catch (error) {
-      // Domain exceptions (InvalidPaymentTransitionException,
+      // Domain exceptions (PaymentDomainError, InvalidPaymentTransitionException,
       // PaymentAlreadyFinalizedException) are caught here — unlike other use
       // cases — because rethrowing would break the HTTP 200 contract and cause
       // the provider to retry. Logging preserves observability without
       // disrupting the webhook handshake.
-      this.logger.error(
-        `[HandlePaymentWebhook] Transition failed for payment ${payment.id}`,
-        error instanceof Error ? error.stack : String(error),
-      );
+      //
+      // Controlled domain rule violations are expected during normal operation
+      // (e.g. provider sends duplicate webhooks, out-of-order events) and are
+      // logged at WARN. Truly unexpected errors are logged at ERROR.
+      const isControlledDomainError =
+        error instanceof PaymentDomainError ||
+        error instanceof InvalidPaymentTransitionException ||
+        error instanceof PaymentAlreadyFinalizedException;
+
+      if (isControlledDomainError) {
+        this.logger.warn(
+          `[HandlePaymentWebhook] Transition failed for payment ${payment.id}: ${error.message}`,
+        );
+      } else {
+        this.logger.error(
+          `[HandlePaymentWebhook] Unexpected error for payment ${payment.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     }
   }
 
