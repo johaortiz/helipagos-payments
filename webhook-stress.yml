@@ -15,6 +15,24 @@ config:
     # Install if needed: npm install -D @artillery/plugin-expect
     expect: {}
 
+# ── Webhook authentication notes ────────────────────────────────────────────
+# Helipagos documentation states that webhook POST requests include an "apikey"
+# header. The value must match HELIPAGOS_WEBHOOK_SECRET (the "Webhook" token
+# provided by Helipagos — NOT the Bearer token used for outbound API calls).
+#
+# Relevant environment variables:
+#   HELIPAGOS_WEBHOOK_SECRET         — expected secret value; if unset, validation is skipped
+#   HELIPAGOS_WEBHOOK_SECRET_HEADER  — header name (default: apikey)
+#   HELIPAGOS_WEBHOOK_SECRET_REQUIRED — when "true" (default), absent header is
+#                                       acknowledged but not processed
+#
+# DO NOT commit real secrets. Export HELIPAGOS_WEBHOOK_SECRET before running:
+#   HELIPAGOS_WEBHOOK_SECRET=<your-webhook-token> pnpm stress:webhook
+#
+# All scenarios below expect HTTP 200. The webhook endpoint always returns 200
+# regardless of validation outcome — failures are acknowledged but not processed
+# to prevent the provider from retrying indefinitely.
+
 scenarios:
   # ── Existing concurrent load ───────────────────────────────────────────────
 
@@ -25,6 +43,10 @@ scenarios:
           url: "/api/payments/webhook"
           headers:
             Content-Type: "application/json"
+            # Scenario A: valid apikey — processed by the application.
+            # Artillery 2.x reads $processEnvironment from the shell environment.
+            # Run with: HELIPAGOS_WEBHOOK_SECRET=<token> pnpm stress:webhook
+            apikey: "{{ $processEnvironment.HELIPAGOS_WEBHOOK_SECRET }}"
           json:
             id_sp: 706153
             estado: "PROCESADA"
@@ -40,6 +62,7 @@ scenarios:
           url: "/api/payments/webhook"
           headers:
             Content-Type: "application/json"
+            apikey: "{{ $processEnvironment.HELIPAGOS_WEBHOOK_SECRET }}"
           json:
             id_sp: 706153
             estado: "PROCESADA"
@@ -55,6 +78,7 @@ scenarios:
           url: "/api/payments/webhook"
           headers:
             Content-Type: "application/json"
+            apikey: "{{ $processEnvironment.HELIPAGOS_WEBHOOK_SECRET }}"
           json:
             id_sp: 999999
             estado: "PROCESADA"
@@ -69,6 +93,7 @@ scenarios:
           url: "/api/payments/webhook"
           headers:
             Content-Type: "application/json"
+            apikey: "{{ $processEnvironment.HELIPAGOS_WEBHOOK_SECRET }}"
           json:
             id_sp: 706153
             estado: "ESTADO_INVALIDO"
@@ -76,19 +101,21 @@ scenarios:
           expect:
             - statusCode: 200
 
-  # ── Secret header validation ───────────────────────────────────────────────
+  # ── apikey validation scenarios ────────────────────────────────────────────
   # The endpoint contract guarantees HTTP 200 in all three cases below.
-  # Internal processing only occurs when the header is absent or correct.
+  # Internal processing only occurs when the apikey is present and correct
+  # (or when HELIPAGOS_WEBHOOK_SECRET_REQUIRED=false and the header is absent).
 
-  - name: "SECRET válido - webhook procesado normalmente"
-    # Correct shared secret → validation passes → use case runs.
+  - name: "Scenario A: apikey válido - webhook procesado normalmente"
+    # Correct Helipagos Webhook token → validation passes → use case runs.
+    # apikey value is read from HELIPAGOS_WEBHOOK_SECRET at runtime.
     weight: 20
     flow:
       - post:
           url: "/api/payments/webhook"
           headers:
             Content-Type: "application/json"
-            x-webhook-secret: "test-webhook-secret-xyz"
+            apikey: "{{ $processEnvironment.HELIPAGOS_WEBHOOK_SECRET }}"
           json:
             id_sp: 706153
             estado: "PROCESADA"
@@ -97,8 +124,8 @@ scenarios:
           expect:
             - statusCode: 200
 
-  - name: "SECRET inválido - webhook ignorado, siempre HTTP 200"
-    # Wrong secret value → controller returns early without calling the use case.
+  - name: "Scenario B: apikey inválido - webhook ignorado, siempre HTTP 200"
+    # Wrong apikey value → controller returns early without calling the use case.
     # HTTP 200 is still returned to prevent the provider from retrying.
     weight: 15
     flow:
@@ -106,7 +133,7 @@ scenarios:
           url: "/api/payments/webhook"
           headers:
             Content-Type: "application/json"
-            x-webhook-secret: "valor-incorrecto"
+            apikey: "invalid-secret"
           json:
             id_sp: 706153
             estado: "PROCESADA"
@@ -115,8 +142,9 @@ scenarios:
           expect:
             - statusCode: 200
 
-  - name: "Sin header secret - validación omitida, webhook procesado"
-    # Header absent → validation skipped → use case runs as normal.
+  - name: "Scenario C: sin apikey - ignorado (HELIPAGOS_WEBHOOK_SECRET_REQUIRED=true)"
+    # Header absent + HELIPAGOS_WEBHOOK_SECRET_REQUIRED=true (default) →
+    # controller acknowledges with HTTP 200 but does not call the use case.
     weight: 10
     flow:
       - post:
