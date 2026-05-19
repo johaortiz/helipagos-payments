@@ -40,6 +40,10 @@ FROM base AS build
 
 COPY --from=deps /app/node_modules ./node_modules
 
+# package.json (and lockfile) must be present so pnpm can locate the project
+# manifest before running the build script.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
 # Copy only the files required for compilation
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
