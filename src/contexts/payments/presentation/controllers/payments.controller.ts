@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -9,6 +10,7 @@ import {
   Logger,
   Param,
   Post,
+  Query,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -17,6 +19,7 @@ import {
   ApiBearerAuth,
   ApiHeader,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -25,7 +28,9 @@ import { CancelPaymentUseCase } from '../../application/uses-cases/cancel-paymen
 import { CreatePaymentUseCase } from '../../application/uses-cases/create-payment.use-case';
 import { GetPaymentUseCase } from '../../application/uses-cases/get-payment.use-case';
 import { HandlePaymentWebhookUseCase } from '../../application/uses-cases/handle-payment-webhook.use-case';
+import { LookupPaymentUseCase } from '../../application/uses-cases/lookup-payment.use-case';
 import { CreatePaymentDto } from '../dto/create-payment.dto';
+import { LookupPaymentQueryDto } from '../dto/lookup-payment.query.dto';
 import { PaymentResponseDto } from '../dto/payment-response.dto';
 import { PaymentWebhookDto } from '../dto/payment-webhook.dto';
 import { JwtAuthGuard } from 'src/contexts/auth/guards/jwt-auth.guard';
@@ -42,6 +47,7 @@ export class PaymentsController {
     private readonly getPaymentUseCase: GetPaymentUseCase,
     private readonly cancelPaymentUseCase: CancelPaymentUseCase,
     private readonly handlePaymentWebhookUseCase: HandlePaymentWebhookUseCase,
+    private readonly lookupPaymentUseCase: LookupPaymentUseCase,
     private readonly configService: ConfigService,
   ) {}
 
@@ -60,9 +66,65 @@ export class PaymentsController {
       externalReference: dto.externalReference,
       redirectUrl: dto.redirectUrl,
       webhookUrl: dto.webhookUrl,
+      surcharge: dto.surcharge,
+      secondExpirationDate: dto.secondExpirationDate,
+      secondaryReference: dto.secondaryReference,
     });
 
     return PaymentResponseDto.fromCreateOutput(output, dto.description);
+  }
+
+  // ── GET /payments/lookup
+  // Defined before :id so NestJS never treats the literal string "lookup" as a UUID param.
+
+  @Get('lookup')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Look up a payment by external reference or provider ID',
+    description:
+      'Returns the locally-stored payment record matching the supplied ' +
+      '`externalReference` **or** `externalPaymentId`.\n\n' +
+      'At least one query parameter is required. When both are provided, ' +
+      '`externalReference` takes precedence.\n\n' +
+      'This endpoint returns the local domain status and never calls the ' +
+      'payment provider.',
+  })
+  @ApiQuery({
+    name: 'externalReference',
+    required: false,
+    type: String,
+    description: 'Merchant-assigned external reference (idempotency key).',
+    example: 'order-abc-123',
+  })
+  @ApiQuery({
+    name: 'externalPaymentId',
+    required: false,
+    type: Number,
+    description: 'Provider-assigned numeric payment ID (Helipagos id_sp).',
+    example: 706153,
+  })
+  @ApiResponse({ status: 200, type: PaymentResponseDto })
+  @ApiResponse({
+    status: 400,
+    description:
+      'At least one of externalReference or externalPaymentId must be provided.',
+  })
+  @ApiResponse({ status: 404, description: 'Payment not found.' })
+  async lookup(
+    @Query() query: LookupPaymentQueryDto,
+  ): Promise<PaymentResponseDto> {
+    if (!query.externalReference && !query.externalPaymentId) {
+      throw new BadRequestException(
+        'At least one of externalReference or externalPaymentId must be provided.',
+      );
+    }
+
+    const output = await this.lookupPaymentUseCase.execute({
+      externalReference: query.externalReference,
+      externalPaymentId: query.externalPaymentId,
+    });
+
+    return PaymentResponseDto.fromLookupOutput(output);
   }
 
   // ── GET /payments/:id

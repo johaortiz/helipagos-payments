@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 import { CreatePaymentOutput } from '../../application/dto/create-payment.output';
+import { LookupPaymentOutput } from '../../application/uses-cases/lookup-payment.use-case';
 import { GetPaymentOutput } from '../../application/uses-cases/get-payment.use-case';
 import { Payment } from '../../domain/entities/payment.entity';
 
@@ -96,6 +97,23 @@ export class PaymentResponseDto {
     dto.checkoutUrl = output.checkoutUrl;
     dto.shortUrl = null;
     dto.barCode = null;
+    dto.createdAt = output.createdAt;
+    dto.updatedAt = output.updatedAt;
+    return dto;
+  }
+
+  static fromLookupOutput(output: LookupPaymentOutput): PaymentResponseDto {
+    const dto = new PaymentResponseDto();
+    dto.id = output.id;
+    dto.externalPaymentId = output.externalPaymentId;
+    dto.externalReference = output.externalReference;
+    dto.amount = output.amount;
+    dto.description = output.description;
+    dto.status = output.status;
+    dto.expirationDate = output.expirationDate;
+    dto.checkoutUrl = output.checkoutUrl;
+    dto.shortUrl = output.shortUrl;
+    dto.barCode = output.barCode;
     dto.createdAt = output.createdAt;
     dto.updatedAt = output.updatedAt;
     return dto;

@@ -6,6 +6,7 @@ import { CancelPaymentUseCase } from './application/uses-cases/cancel-payment.us
 import { CreatePaymentUseCase } from './application/uses-cases/create-payment.use-case';
 import { GetPaymentUseCase } from './application/uses-cases/get-payment.use-case';
 import { HandlePaymentWebhookUseCase } from './application/uses-cases/handle-payment-webhook.use-case';
+import { LookupPaymentUseCase } from './application/uses-cases/lookup-payment.use-case';
 import { PaymentProviderGateway } from './domain/gateways/payment-provider.gateway';
 import { PaymentRepository } from './domain/repositories/payment.repository';
 import { HelipagosGateway } from './infrastructure/gateways/helipagos.gateway';
@@ -23,6 +24,7 @@ import { PaymentsController } from './presentation/controllers/payments.controll
     GetPaymentUseCase,
     CancelPaymentUseCase,
     HandlePaymentWebhookUseCase,
+    LookupPaymentUseCase,
 
     //  Infrastructure
     HelipagosHttpClient,
@@ -36,6 +38,7 @@ import { PaymentsController } from './presentation/controllers/payments.controll
     GetPaymentUseCase,
     CancelPaymentUseCase,
     HandlePaymentWebhookUseCase,
+    LookupPaymentUseCase,
   ],
 })
 export class PaymentsModule {}
