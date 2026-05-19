@@ -8,4 +8,9 @@ export interface CreatePaymentInput {
   externalReference: string;
   redirectUrl: string;
   webhookUrl?: string;
+  /** Optional surcharge in cents. */
+  surcharge?: number;
+  /** Second expiration date for two-tier pricing. */
+  secondExpirationDate?: string;
+  secondaryReference?: string;
 }

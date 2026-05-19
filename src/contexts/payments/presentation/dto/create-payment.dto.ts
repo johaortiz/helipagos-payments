@@ -3,7 +3,6 @@ import {
   IsDateString,
   IsInt,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsPositive,
   IsString,
@@ -64,7 +63,7 @@ export class CreatePaymentDto {
       'Optional surcharge expressed as an integer number of cents (e.g. 500 = $5.00). ' +
       'Decimal values are not accepted.',
   })
-  @IsNumber()
+  @IsInt()
   @IsPositive()
   @IsOptional()
   surcharge?: number;

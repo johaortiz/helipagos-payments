@@ -59,6 +59,9 @@ export class CreatePaymentUseCase {
       externalReference: input.externalReference,
       redirectUrl: input.redirectUrl,
       webhookUrl: input.webhookUrl,
+      surcharge: input.surcharge,
+      secondExpirationDate: input.secondExpirationDate,
+      secondaryReference: input.secondaryReference,
     });
 
     // ── Confirm creation and persist updated state ────────────────────────────

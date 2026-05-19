@@ -201,4 +201,46 @@ describe('POST /api/payments', () => {
     expect(res.status).toBe(401);
     expect(gateway.createPayment).not.toHaveBeenCalled();
   });
+
+  // ── Scenario 7
+
+  it('should return 400 when surcharge is a decimal (must be integer cents)', async () => {
+    const res = await request(server)
+      .post('/api/payments')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        ...buildValidBody('order-e2e-decimal-surcharge'),
+        surcharge: 5.5,
+      });
+
+    expect(res.status).toBe(400);
+    expect(gateway.createPayment).not.toHaveBeenCalled();
+  });
+
+  // ── Scenario 8
+
+  it('should forward surcharge, secondExpirationDate and secondaryReference to the provider gateway', async () => {
+    gateway.createPayment.mockResolvedValueOnce(VALID_GATEWAY_RESULT);
+
+    const body = {
+      ...buildValidBody('order-e2e-optional-fields-001'),
+      surcharge: 500,
+      secondExpirationDate: '2027-01-15',
+      secondaryReference: 'invoice-456',
+    };
+
+    const res = await request(server)
+      .post('/api/payments')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(body);
+
+    expect(res.status).toBe(201);
+    expect(gateway.createPayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        surcharge: 500,
+        secondExpirationDate: '2027-01-15',
+        secondaryReference: 'invoice-456',
+      }),
+    );
+  });
 });
