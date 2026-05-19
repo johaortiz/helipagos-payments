@@ -70,13 +70,18 @@ export class PaymentsController {
       'Payment provider rejected the request (invalid payload sent upstream).',
   })
   async create(@Body() dto: CreatePaymentDto): Promise<PaymentResponseDto> {
+    // Prefer the server-configured WEBHOOK_URL so callers cannot accidentally
+    // break provider notifications by submitting a wrong URL via the request body.
+    const configuredWebhookUrl = this.configService.get<string>('WEBHOOK_URL');
+    const effectiveWebhookUrl = configuredWebhookUrl?.trim() || dto.webhookUrl;
+
     const output = await this.createPaymentUseCase.execute({
       amount: dto.amount,
       expirationDate: dto.expirationDate,
       description: dto.description,
       externalReference: dto.externalReference,
       redirectUrl: dto.redirectUrl,
-      webhookUrl: dto.webhookUrl,
+      webhookUrl: effectiveWebhookUrl,
       surcharge: dto.surcharge,
       secondExpirationDate: dto.secondExpirationDate,
       secondaryReference: dto.secondaryReference,

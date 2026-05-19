@@ -306,3 +306,94 @@ describe('POST /api/payments', () => {
     );
   });
 });
+
+// ── Webhook URL resolution — WEBHOOK_URL configured ───────────────────────────
+//
+// A separate app is created here with a controlled WEBHOOK_URL so assertions
+// can reference a known value instead of the one from .env.test.
+// The process.env value is set BEFORE createTestApp() because NestJS ConfigModule
+// uses dotenv, which does NOT overwrite already-set process.env variables.
+
+describe('POST /api/payments — WEBHOOK_URL override', () => {
+  const CONTROLLED_WEBHOOK_URL =
+    'https://controlled.example.com/api/payments/webhook';
+  const WRONG_BODY_WEBHOOK_URL =
+    'https://wrong.example.com/api/payments/webhooks'; // note: "webhooks" plural
+
+  let app: INestApplication;
+  let moduleRef: TestingModule;
+  let gateway: ReturnType<typeof getProviderGatewayMock>;
+  let authToken: string;
+  let server: Server;
+  let originalWebhookUrl: string | undefined;
+
+  beforeAll(async () => {
+    // Persist whatever value was already in process.env so we can restore it.
+    originalWebhookUrl = process.env.WEBHOOK_URL;
+    // Override BEFORE createTestApp() — dotenv will skip this key when loading
+    // .env.test because it does not overwrite already-defined env vars.
+    process.env.WEBHOOK_URL = CONTROLLED_WEBHOOK_URL;
+
+    ({ app, moduleRef } = await createTestApp());
+    gateway = getProviderGatewayMock(moduleRef);
+    server = app.getHttpServer() as Server;
+
+    const loginRes = await request(server)
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+
+    authToken = (loginRes.body as LoginResponseBody).accessToken;
+  });
+
+  afterAll(async () => {
+    await app.close();
+    // Restore so subsequent test suites see the original value.
+    if (originalWebhookUrl !== undefined) {
+      process.env.WEBHOOK_URL = originalWebhookUrl;
+    } else {
+      delete process.env.WEBHOOK_URL;
+    }
+  });
+
+  beforeEach(() => {
+    gateway.createPayment.mockReset();
+  });
+
+  // ── Scenario W1
+
+  it('should forward WEBHOOK_URL from env to provider, ignoring a wrong body webhookUrl', async () => {
+    gateway.createPayment.mockResolvedValueOnce(buildGatewayResult(300001));
+
+    const res = await request(server)
+      .post('/api/payments')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        ...buildValidBody('order-e2e-webhook-override-001'),
+        webhookUrl: WRONG_BODY_WEBHOOK_URL,
+      });
+
+    expect(res.status).toBe(201);
+    expect(gateway.createPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ webhookUrl: CONTROLLED_WEBHOOK_URL }),
+    );
+    expect(gateway.createPayment).not.toHaveBeenCalledWith(
+      expect.objectContaining({ webhookUrl: WRONG_BODY_WEBHOOK_URL }),
+    );
+  });
+
+  // ── Scenario W2
+
+  it('should use WEBHOOK_URL from env even when body omits webhookUrl', async () => {
+    gateway.createPayment.mockResolvedValueOnce(buildGatewayResult(300002));
+
+    const res = await request(server)
+      .post('/api/payments')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(buildValidBody('order-e2e-webhook-override-002'));
+
+    expect(res.status).toBe(201);
+    expect(gateway.createPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ webhookUrl: CONTROLLED_WEBHOOK_URL }),
+    );
+  });
+});

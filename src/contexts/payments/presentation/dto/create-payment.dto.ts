@@ -48,9 +48,15 @@ export class CreatePaymentDto {
   redirectUrl!: string;
 
   @ApiPropertyOptional({
-    example: 'https://mystore.com/webhooks/helipagos',
+    example: 'https://your-domain.com/api/payments/webhook',
     description:
-      'Optional webhook URL. Falls back to WEBHOOK_URL environment variable.',
+      'Webhook URL for provider payment-status callbacks.\n\n' +
+      'When the `WEBHOOK_URL` environment variable is configured, the backend ' +
+      'always uses it as the authoritative provider webhook URL and this field ' +
+      'is ignored — preventing accidental misconfiguration from Swagger or ' +
+      'API clients.\n\n' +
+      'When `WEBHOOK_URL` is **not** configured, this field is used as a ' +
+      'fallback and will be forwarded to the provider as-is.',
   })
   @IsUrl()
   @IsOptional()
