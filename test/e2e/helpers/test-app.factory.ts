@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from '../../../src/contexts/auth/auth.module';
+import { HealthModule } from '../../../src/contexts/health/health.module';
 import { PaymentsModule } from '../../../src/contexts/payments/payments.module';
 import { PaymentProviderGateway } from '../../../src/contexts/payments/domain/gateways/payment-provider.gateway';
 import { GlobalExceptionFilter } from '../../../src/contexts/shared/filters/global-exception.filter';
@@ -41,6 +42,7 @@ export async function createTestApp(): Promise<{
         }),
       }),
       AuthModule,
+      HealthModule,
       PaymentsModule,
     ],
   })

@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from './contexts/auth/auth.module';
+import { HealthModule } from './contexts/health/health.module';
 import { PaymentsModule } from './contexts/payments/payments.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { PaymentsModule } from './contexts/payments/payments.module';
     }),
 
     AuthModule,
+    HealthModule,
     PaymentsModule,
   ],
 })
