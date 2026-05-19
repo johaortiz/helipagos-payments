@@ -25,7 +25,8 @@
     "typeorm": "typeorm-ts-node-commonjs -d src/database/typeorm.config.ts",
     "migration:generate": "pnpm typeorm migration:generate src/database/migrations/Init",
     "migration:run": "pnpm typeorm migration:run",
-    "migration:revert": "pnpm typeorm migration:revert"
+    "migration:revert": "pnpm typeorm migration:revert",
+    "migration:bootstrap": "ts-node --project tsconfig.seed.json --transpile-only -r tsconfig-paths/register src/database/scripts/bootstrap-migrations.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
