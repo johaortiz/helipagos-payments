@@ -1,13 +1,5 @@
+import { PaymentDomainError } from '../exceptions/payment-domain.error';
 import { PaymentStatus } from '../enums/payment-status.enum';
-
-// ─── Domain error ────────────────────────────────────────────────────────────
-
-export class PaymentDomainError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PaymentDomainError';
-  }
-}
 
 // ─── Construction props ──────────────────────────────────────────────────────
 

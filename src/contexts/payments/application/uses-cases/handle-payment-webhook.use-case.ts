@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { Payment } from '../../domain/entities/payment.entity';
 import { PaymentRepository } from '../../domain/repositories/payment.repository';
@@ -6,6 +6,8 @@ import { PaymentWebhookInput } from '../dto/payment-webhook.input';
 
 @Injectable()
 export class HandlePaymentWebhookUseCase {
+  private readonly logger = new Logger(HandlePaymentWebhookUseCase.name);
+
   constructor(private readonly paymentRepository: PaymentRepository) {}
 
   // This method never throws. The webhook contract with the provider requires
@@ -28,7 +30,7 @@ export class HandlePaymentWebhookUseCase {
       // (created externally, before integration, or with mismatched IDs).
       // Returning silently keeps the endpoint responsive and prevents
       // the provider from retrying indefinitely for unresolvable events.
-      console.warn(
+      this.logger.warn(
         `[HandlePaymentWebhook] No payment found for provider ID: ${input.id_sp}`,
       );
       return;
@@ -45,9 +47,9 @@ export class HandlePaymentWebhookUseCase {
       // cases — because rethrowing would break the HTTP 200 contract and cause
       // the provider to retry. Logging preserves observability without
       // disrupting the webhook handshake.
-      console.error(
+      this.logger.error(
         `[HandlePaymentWebhook] Transition failed for payment ${payment.id}`,
-        error,
+        error instanceof Error ? error.stack : String(error),
       );
     }
   }
@@ -80,7 +82,7 @@ export class HandlePaymentWebhookUseCase {
         // Unknown estados are silently ignored. The provider may introduce new
         // status values in future API versions — ignoring them keeps the system
         // forward-compatible without requiring a deployment for every provider change.
-        console.warn(
+        this.logger.warn(
           `[HandlePaymentWebhook] Unknown estado '${estado}' for payment ${payment.id}. Skipping.`,
         );
         return false;

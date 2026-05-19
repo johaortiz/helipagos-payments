@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
-import { PaymentDomainError } from '../../payments/domain/entities/payment.entity';
+import { PaymentDomainError } from '../../payments/domain/exceptions/payment-domain.error';
 import { InvalidPaymentTransitionException } from '../../payments/domain/exceptions/invalid-payment-transition.exception';
 import { PaymentAlreadyFinalizedException } from '../../payments/domain/exceptions/payment-already-finalized.exception';
 import { PaymentNotFoundException } from '../../payments/domain/exceptions/payment-not-found-exception';

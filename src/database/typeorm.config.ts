@@ -1,5 +1,12 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
+
+// Load env-specific file first so its values take precedence, then fall back
+// to .env for any variables not present in the env-specific file.
+// dotenv.config() never overwrites variables already set in process.env,
+// so Docker-injected values are always respected.
+config({ path: `.env.${process.env.NODE_ENV ?? 'development'}` });
+config({ path: '.env' });
 
 import { PaymentOrmEntity } from '../contexts/payments/infrastructure/persistence/entities/payment.orm-entity';
 
