@@ -18,11 +18,29 @@ function buildInput(
   return { id_sp, estado, referencia_externa: 'order-test-001', ...extra };
 }
 
+type MockRepo = ReturnType<typeof createMockPaymentRepository>;
+
+/**
+ * Configures processByExternalPaymentIdForUpdate to act as if the given
+ * payment was found: invokes the handler callback and returns the payment.
+ */
+function mockFoundPayment(repo: MockRepo, payment: Payment): void {
+  repo.processByExternalPaymentIdForUpdate.mockImplementation(
+    async (
+      _id: number,
+      handler: (p: Payment) => boolean | Promise<boolean>,
+    ) => {
+      await handler(payment);
+      return payment;
+    },
+  );
+}
+
 // ─── Suite ────────────────────────────────────────────────────────────────────
 
 describe('HandlePaymentWebhookUseCase', () => {
   let useCase: HandlePaymentWebhookUseCase;
-  let repository: ReturnType<typeof createMockPaymentRepository>;
+  let repository: MockRepo;
 
   beforeEach(() => {
     repository = createMockPaymentRepository();
@@ -39,119 +57,119 @@ describe('HandlePaymentWebhookUseCase', () => {
 
   it('should update payment status to PROCESSED when estado is PROCESADA', async () => {
     const payment = createCreatedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await useCase.execute(buildInput(987654, 'PROCESADA'));
 
-    const updated = (repository.update.mock.calls[0] as [Payment])[0];
-    expect(updated.status).toBe(PaymentStatus.PROCESSED);
-    expect(repository.update).toHaveBeenCalledTimes(1);
+    expect(payment.status).toBe(PaymentStatus.PROCESSED);
+    expect(repository.processByExternalPaymentIdForUpdate).toHaveBeenCalledWith(
+      987654,
+      expect.any(Function),
+    );
   });
 
   // ── 2 — ACREDITADA ────────────────────────────────────────────────────────
 
   it('should update payment status to ACCREDITED when estado is ACREDITADA', async () => {
     const payment = createProcessedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await useCase.execute(buildInput(987654, 'ACREDITADA'));
 
-    const updated = (repository.update.mock.calls[0] as [Payment])[0];
-    expect(updated.status).toBe(PaymentStatus.ACCREDITED);
-    expect(repository.update).toHaveBeenCalledTimes(1);
+    expect(payment.status).toBe(PaymentStatus.ACCREDITED);
   });
 
   // ── 3 — VENCIDA ───────────────────────────────────────────────────────────
 
   it('should update payment status to EXPIRED when estado is VENCIDA', async () => {
     const payment = createCreatedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await useCase.execute(buildInput(987654, 'VENCIDA'));
 
-    const updated = (repository.update.mock.calls[0] as [Payment])[0];
-    expect(updated.status).toBe(PaymentStatus.EXPIRED);
+    expect(payment.status).toBe(PaymentStatus.EXPIRED);
   });
 
   // ── 4 — ANULADA ───────────────────────────────────────────────────────────
 
   it('should update payment status to REJECTED when estado is ANULADA', async () => {
     const payment = createCreatedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await useCase.execute(buildInput(987654, 'ANULADA'));
 
-    const updated = (repository.update.mock.calls[0] as [Payment])[0];
-    expect(updated.status).toBe(PaymentStatus.REJECTED);
+    expect(payment.status).toBe(PaymentStatus.REJECTED);
   });
 
   // ── 5 — RECHAZADA ─────────────────────────────────────────────────────────
 
   it('should update payment status to REJECTED when estado is RECHAZADA', async () => {
     const payment = createCreatedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await useCase.execute(buildInput(987654, 'RECHAZADA'));
 
-    const updated = (repository.update.mock.calls[0] as [Payment])[0];
-    expect(updated.status).toBe(PaymentStatus.REJECTED);
+    expect(payment.status).toBe(PaymentStatus.REJECTED);
   });
 
   // ── 6 — DEVUELTA ─────────────────────────────────────────────────────────
 
   it('should update payment status to CHARGEBACK when estado is DEVUELTA', async () => {
     const payment = createProcessedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await useCase.execute(buildInput(987654, 'DEVUELTA'));
 
-    const updated = (repository.update.mock.calls[0] as [Payment])[0];
-    expect(updated.status).toBe(PaymentStatus.CHARGEBACK);
+    expect(payment.status).toBe(PaymentStatus.CHARGEBACK);
   });
 
   // ── 7 — CONTRACARGO ──────────────────────────────────────────────────────
 
   it('should update payment status to CHARGEBACK when estado is CONTRACARGO', async () => {
     const payment = createProcessedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await useCase.execute(buildInput(987654, 'CONTRACARGO'));
 
-    const updated = (repository.update.mock.calls[0] as [Payment])[0];
-    expect(updated.status).toBe(PaymentStatus.CHARGEBACK);
+    expect(payment.status).toBe(PaymentStatus.CHARGEBACK);
   });
 
   // ── 8 — payment not found ────────────────────────────────────────────────
 
   it('should return void and NOT throw when id_sp is unknown', async () => {
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(null);
-
+    // Default mock: processByExternalPaymentIdForUpdate returns null.
     await expect(
       useCase.execute(buildInput(999999, 'PROCESADA')),
     ).resolves.toBeUndefined();
+
+    expect(repository.processByExternalPaymentIdForUpdate).toHaveBeenCalledWith(
+      999999,
+      expect.any(Function),
+    );
   });
 
   // ── 9 — unknown estado ───────────────────────────────────────────────────
 
   it('should return void and NOT throw when estado is unknown', async () => {
     const payment = createCreatedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await expect(
       useCase.execute(buildInput(987654, 'ESTADO_DESCONOCIDO')),
     ).resolves.toBeUndefined();
+
+    // Domain entity must not have changed status.
+    expect(payment.status).toBe(PaymentStatus.CREATED);
   });
 
   // ── 10 — domain transition throws ────────────────────────────────────────
 
   it('should return void and NOT throw when domain transition throws', async () => {
-    // EXPIRED is terminal — markAsProcessed will throw PaymentDomainError
+    // EXPIRED is terminal — markAsProcessed will throw PaymentDomainError.
     const terminalPayment = createCreatedPaymentFixture({
       status: PaymentStatus.EXPIRED,
     });
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(
-      terminalPayment,
-    );
+    mockFoundPayment(repository, terminalPayment);
 
     await expect(
       useCase.execute(buildInput(987654, 'PROCESADA')),
@@ -160,34 +178,35 @@ describe('HandlePaymentWebhookUseCase', () => {
 
   // ── 11 — locking contract ────────────────────────────────────────────────
 
-  it('should call findByExternalPaymentIdForUpdate (not findByExternalPaymentId)', async () => {
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(null);
-
+  it('should call processByExternalPaymentIdForUpdate — not the bare find or update methods', async () => {
+    // Default mock: returns null (payment not found).
     await useCase.execute(buildInput(987654, 'PROCESADA'));
 
-    expect(repository.findByExternalPaymentIdForUpdate).toHaveBeenCalledWith(
+    expect(repository.processByExternalPaymentIdForUpdate).toHaveBeenCalledWith(
       987654,
+      expect.any(Function),
     );
     expect(repository.findByExternalPaymentId).not.toHaveBeenCalled();
+    expect(repository.findByExternalPaymentIdForUpdate).not.toHaveBeenCalled();
   });
 
-  // ── 12 — update called after successful transition ────────────────────────
+  // ── 12 — persistence delegated to transactional method ───────────────────
 
-  it('should call repository.update after a successful transition', async () => {
+  it('should NOT call repository.update directly; persistence is handled inside processByExternalPaymentIdForUpdate', async () => {
     const payment = createCreatedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await useCase.execute(buildInput(987654, 'PROCESADA'));
 
-    expect(repository.update).toHaveBeenCalledTimes(1);
-    expect(repository.update).toHaveBeenCalledWith(payment);
+    expect(repository.update).not.toHaveBeenCalled();
+    // Domain entity was mutated by the handler inside the transaction.
+    expect(payment.status).toBe(PaymentStatus.PROCESSED);
   });
 
   // ── 13 — no update when payment not found ────────────────────────────────
 
   it('should NOT call repository.update when payment is not found', async () => {
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(null);
-
+    // Default mock: processByExternalPaymentIdForUpdate returns null.
     await useCase.execute(buildInput(999999, 'PROCESADA'));
 
     expect(repository.update).not.toHaveBeenCalled();
@@ -197,7 +216,7 @@ describe('HandlePaymentWebhookUseCase', () => {
 
   it('should NOT call repository.update when estado is unknown', async () => {
     const payment = createCreatedPaymentFixture();
-    repository.findByExternalPaymentIdForUpdate.mockResolvedValue(payment);
+    mockFoundPayment(repository, payment);
 
     await useCase.execute(buildInput(987654, 'ESTADO_DESCONOCIDO'));
 

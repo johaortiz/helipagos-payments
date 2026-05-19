@@ -56,4 +56,21 @@ export abstract class PaymentRepository {
   abstract findByExternalPaymentIdForUpdate(
     externalPaymentId: number,
   ): Promise<Payment | null>;
+
+  /**
+   * Executes the full read → lock → transition → write cycle inside a single
+   * database transaction.
+   *
+   * Acquires a pessimistic write lock by provider ID, maps the record to a
+   * domain Payment, invokes the handler, and persists the result only if the
+   * handler returns true. Returns null (without invoking the handler) when no
+   * payment exists for the given provider ID.
+   *
+   * If the handler throws, the transaction is rolled back automatically and
+   * the error is re-thrown to the caller.
+   */
+  abstract processByExternalPaymentIdForUpdate(
+    externalPaymentId: number,
+    handler: (payment: Payment) => boolean | Promise<boolean>,
+  ): Promise<Payment | null>;
 }

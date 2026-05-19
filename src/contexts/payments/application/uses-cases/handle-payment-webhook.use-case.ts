@@ -17,39 +17,28 @@ export class HandlePaymentWebhookUseCase {
   // HTTP 200 on every response — throwing would propagate to the controller
   // and trigger indefinite retries from the provider, amplifying the problem.
   async execute(input: PaymentWebhookInput): Promise<void> {
-    // findByExternalPaymentId is used here because the webhook carries id_sp
-    // (the provider's numeric ID), not the internal domain UUID.
-    // The repository contract exposes findByIdForUpdate for pessimistic locking
-    // (SELECT FOR UPDATE), but it operates on internal IDs. The infrastructure
-    // implementation should wrap this lookup in a transaction to prevent
-    // concurrent webhooks from corrupting the same payment's state.
-    const payment =
-      await this.paymentRepository.findByExternalPaymentIdForUpdate(
-        input.id_sp,
-      );
-
-    if (!payment) {
-      // The provider may send webhooks for payments unknown to this system
-      // (created externally, before integration, or with mismatched IDs).
-      // Returning silently keeps the endpoint responsive and prevents
-      // the provider from retrying indefinitely for unresolvable events.
-      this.logger.warn(
-        `[HandlePaymentWebhook] No payment found for provider ID: ${input.id_sp}`,
-      );
-      return;
-    }
-
     try {
-      const transitioned = this.applyTransition(payment, input.estado);
-      if (transitioned) {
-        await this.paymentRepository.update(payment);
+      // processByExternalPaymentIdForUpdate runs the entire read → lock →
+      // handler → conditional-write cycle inside a single transaction. The
+      // pessimistic write lock is held for the full duration, preventing a
+      // second concurrent webhook for the same payment from reading stale state.
+      const result =
+        await this.paymentRepository.processByExternalPaymentIdForUpdate(
+          input.id_sp,
+          (payment) => this.applyTransition(payment, input.estado),
+        );
+
+      if (result === null) {
+        // The provider may send webhooks for payments unknown to this system
+        // (created externally, before integration, or with mismatched IDs).
+        this.logger.warn(
+          `[HandlePaymentWebhook] No payment found for provider ID: ${input.id_sp}`,
+        );
       }
     } catch (error) {
-      // Domain exceptions (PaymentDomainError, InvalidPaymentTransitionException,
-      // PaymentAlreadyFinalizedException) are caught here — unlike other use
-      // cases — because rethrowing would break the HTTP 200 contract and cause
-      // the provider to retry. Logging preserves observability without
-      // disrupting the webhook handshake.
+      // Domain exceptions are caught here — unlike other use cases — because
+      // rethrowing would break the HTTP 200 contract and cause the provider to
+      // retry. Logging preserves observability without disrupting the handshake.
       //
       // Controlled domain rule violations are expected during normal operation
       // (e.g. provider sends duplicate webhooks, out-of-order events) and are
@@ -61,11 +50,11 @@ export class HandlePaymentWebhookUseCase {
 
       if (isControlledDomainError) {
         this.logger.warn(
-          `[HandlePaymentWebhook] Transition failed for payment ${payment.id}: ${error.message}`,
+          `[HandlePaymentWebhook] Transition failed for provider ID ${input.id_sp}: ${error instanceof Error ? error.message : String(error)}`,
         );
       } else {
         this.logger.error(
-          `[HandlePaymentWebhook] Unexpected error for payment ${payment.id}`,
+          `[HandlePaymentWebhook] Unexpected error for provider ID ${input.id_sp}`,
           error instanceof Error ? error.stack : String(error),
         );
       }

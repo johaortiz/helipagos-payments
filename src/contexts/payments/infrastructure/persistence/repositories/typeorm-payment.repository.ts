@@ -76,6 +76,25 @@ export class TypeOrmPaymentRepository extends PaymentRepository {
     });
   }
 
+  async processByExternalPaymentIdForUpdate(
+    externalPaymentId: number,
+    handler: (payment: Payment) => boolean | Promise<boolean>,
+  ): Promise<Payment | null> {
+    return this.dataSource.transaction(async (manager) => {
+      const orm = await manager.findOne(PaymentOrmEntity, {
+        where: { externalPaymentId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!orm) return null;
+      const payment = this.toDomain(orm);
+      const shouldSave = await handler(payment);
+      if (shouldSave) {
+        await manager.save(PaymentOrmEntity, this.toOrm(payment));
+      }
+      return payment;
+    });
+  }
+
   // ─── Mappers ───────────────────────────────────────────────────────────────
 
   private toDomain(orm: PaymentOrmEntity): Payment {

@@ -8,5 +8,6 @@ export function createMockPaymentRepository() {
     findByExternalPaymentId: jest.fn().mockResolvedValue(null),
     existsByExternalReference: jest.fn().mockResolvedValue(false),
     findByExternalPaymentIdForUpdate: jest.fn().mockResolvedValue(null),
+    processByExternalPaymentIdForUpdate: jest.fn().mockResolvedValue(null),
   };
 }
