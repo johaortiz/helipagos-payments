@@ -211,9 +211,19 @@ describe('POST /api/payments/webhook', () => {
 // Each inner describe creates its own NestJS app with specific env vars so
 // ConfigService sees a different configuration per group.
 //
-// Assertions spy on HandlePaymentWebhookUseCase.execute directly — this avoids
-// exercising GetPaymentUseCase (which calls providerGateway.getPayment and would
-// crash when the mock returns null for that method).
+// process.env values set before createTestApp() override .env.test because
+// dotenv (used by NestJS ConfigModule) does NOT overwrite existing process.env
+// entries (no override:true). Cleanup in afterAll() restores the prior state.
+//
+// Assertions spy on HandlePaymentWebhookUseCase.execute — this avoids
+// exercising GetPaymentUseCase (which calls providerGateway.getPayment and
+// would crash when the mock returns null for that method).
+//
+// Groups follow the specification:
+//   A. Secret not configured — validation skipped entirely
+//   B. Secret configured, REQUIRED=true (default) — absent header rejects request
+//   C. Secret configured, REQUIRED=false — absent header processes normally
+//   D. Custom header name — tests REQUIRED interaction with custom header
 
 describe('POST /api/payments/webhook — secret header validation', () => {
   const WEBHOOK_SECRET = 'test-webhook-secret-xyz';
@@ -223,9 +233,9 @@ describe('POST /api/payments/webhook — secret header validation', () => {
   // without throwing regardless of whether the secret is correct.
   const UNKNOWN_ID_SP = 999_999;
 
-  // ── Group A: default header name (x-webhook-secret) ──────────────────────
+  // ── Group A: HELIPAGOS_WEBHOOK_SECRET not configured ─────────────────────
 
-  describe('default header name (x-webhook-secret)', () => {
+  describe('Group A: secret not configured', () => {
     let app: INestApplication;
     let moduleRef: TestingModule;
     let server: Server;
@@ -233,9 +243,10 @@ describe('POST /api/payments/webhook — secret header validation', () => {
     let executeSpy: jest.SpyInstance;
 
     beforeAll(async () => {
-      // Set before createTestApp() so ConfigService picks it up from process.env.
-      process.env['HELIPAGOS_WEBHOOK_SECRET'] = WEBHOOK_SECRET;
-      // HELIPAGOS_WEBHOOK_SECRET_HEADER left unset → controller falls back to 'x-webhook-secret'.
+      // Override .env.test value with empty string — empty string is falsy so
+      // configService.get('HELIPAGOS_WEBHOOK_SECRET') returns '' and the
+      // validation block is skipped entirely.
+      process.env['HELIPAGOS_WEBHOOK_SECRET'] = '';
 
       ({ app, moduleRef } = await createTestApp());
       webhookUseCase = moduleRef.get(HandlePaymentWebhookUseCase);
@@ -248,7 +259,6 @@ describe('POST /api/payments/webhook — secret header validation', () => {
     });
 
     beforeEach(() => {
-      // Fresh spy each test — call count resets automatically via restoreAllMocks.
       executeSpy = jest.spyOn(webhookUseCase, 'execute');
       jest.spyOn(console, 'warn').mockImplementation(() => undefined);
       jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -260,11 +270,10 @@ describe('POST /api/payments/webhook — secret header validation', () => {
 
     // ── A1 ────────────────────────────────────────────────────────────────────
 
-    it('should return 200 and invoke the use case when the correct secret header is sent', async () => {
+    it('should return 200 and invoke the use case when no apikey header is sent', async () => {
       const res = await request(server)
         .post('/api/payments/webhook')
-        .set('x-webhook-secret', WEBHOOK_SECRET)
-        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-sec-a1'));
+        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-a1'));
 
       expect(res.status).toBe(200);
       expect(executeSpy).toHaveBeenCalledTimes(1);
@@ -272,36 +281,20 @@ describe('POST /api/payments/webhook — secret header validation', () => {
 
     // ── A2 ────────────────────────────────────────────────────────────────────
 
-    it('should return 200 and NOT invoke the use case when an incorrect secret is sent', async () => {
+    it('should return 200 and invoke the use case when any apikey header value is sent (no validation)', async () => {
       const res = await request(server)
         .post('/api/payments/webhook')
-        .set('x-webhook-secret', 'wrong-secret-value')
-        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-sec-a2'));
-
-      expect(res.status).toBe(200);
-      expect(executeSpy).not.toHaveBeenCalled();
-    });
-
-    // ── A3 ────────────────────────────────────────────────────────────────────
-
-    it('should return 200 and invoke the use case when the secret header is absent (validation skipped)', async () => {
-      // Validation only triggers when the header IS present AND its value is wrong.
-      // An absent header means the provider chose not to send it — skip and process normally.
-      const res = await request(server)
-        .post('/api/payments/webhook')
-        // No secret header set.
-        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-sec-a3'));
+        .set('apikey', 'any-arbitrary-value')
+        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-a2'));
 
       expect(res.status).toBe(200);
       expect(executeSpy).toHaveBeenCalledTimes(1);
     });
   });
 
-  // ── Group B: custom header name (HELIPAGOS_WEBHOOK_SECRET_HEADER) ─────────
+  // ── Group B: secret configured, REQUIRED=true ─────────────────────────────
 
-  describe('custom header name (HELIPAGOS_WEBHOOK_SECRET_HEADER)', () => {
-    const CUSTOM_HEADER = 'x-helipagos-signature';
-
+  describe('Group B: secret configured, REQUIRED=true (default apikey header)', () => {
     let app: INestApplication;
     let moduleRef: TestingModule;
     let server: Server;
@@ -310,7 +303,8 @@ describe('POST /api/payments/webhook — secret header validation', () => {
 
     beforeAll(async () => {
       process.env['HELIPAGOS_WEBHOOK_SECRET'] = WEBHOOK_SECRET;
-      process.env['HELIPAGOS_WEBHOOK_SECRET_HEADER'] = CUSTOM_HEADER;
+      process.env['HELIPAGOS_WEBHOOK_SECRET_HEADER'] = 'apikey';
+      process.env['HELIPAGOS_WEBHOOK_SECRET_REQUIRED'] = 'true';
 
       ({ app, moduleRef } = await createTestApp());
       webhookUseCase = moduleRef.get(HandlePaymentWebhookUseCase);
@@ -321,6 +315,7 @@ describe('POST /api/payments/webhook — secret header validation', () => {
       await app.close();
       delete process.env['HELIPAGOS_WEBHOOK_SECRET'];
       delete process.env['HELIPAGOS_WEBHOOK_SECRET_HEADER'];
+      delete process.env['HELIPAGOS_WEBHOOK_SECRET_REQUIRED'];
     });
 
     beforeEach(() => {
@@ -335,11 +330,11 @@ describe('POST /api/payments/webhook — secret header validation', () => {
 
     // ── B1 ────────────────────────────────────────────────────────────────────
 
-    it('should return 200 and invoke the use case when the correct value is in the custom header', async () => {
+    it('should return 200 and invoke the use case when the correct apikey is sent', async () => {
       const res = await request(server)
         .post('/api/payments/webhook')
-        .set(CUSTOM_HEADER, WEBHOOK_SECRET)
-        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-custom-b1'));
+        .set('apikey', WEBHOOK_SECRET)
+        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-b1'));
 
       expect(res.status).toBe(200);
       expect(executeSpy).toHaveBeenCalledTimes(1);
@@ -347,11 +342,11 @@ describe('POST /api/payments/webhook — secret header validation', () => {
 
     // ── B2 ────────────────────────────────────────────────────────────────────
 
-    it('should return 200 and NOT invoke the use case when a wrong value is in the custom header', async () => {
+    it('should return 200 and NOT invoke the use case when a wrong apikey is sent', async () => {
       const res = await request(server)
         .post('/api/payments/webhook')
-        .set(CUSTOM_HEADER, 'tampered-value')
-        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-custom-b2'));
+        .set('apikey', 'wrong-secret-value')
+        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-b2'));
 
       expect(res.status).toBe(200);
       expect(executeSpy).not.toHaveBeenCalled();
@@ -359,17 +354,207 @@ describe('POST /api/payments/webhook — secret header validation', () => {
 
     // ── B3 ────────────────────────────────────────────────────────────────────
 
-    it('should return 200 and invoke the use case when the configured custom header is absent (wrong header name sent)', async () => {
-      // The controller looks at CUSTOM_HEADER, not 'x-webhook-secret'.
-      // Sending the default header name is invisible to the validation logic —
-      // the configured header (CUSTOM_HEADER) is absent → validation skipped → processed.
+    it('should return 200 and NOT invoke the use case when the apikey header is absent (REQUIRED=true)', async () => {
       const res = await request(server)
         .post('/api/payments/webhook')
-        .set('x-webhook-secret', WEBHOOK_SECRET) // wrong header name — custom header absent
-        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-custom-b3'));
+        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-b3'));
+
+      expect(res.status).toBe(200);
+      expect(executeSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Group C: secret configured, REQUIRED=false ────────────────────────────
+
+  describe('Group C: secret configured, REQUIRED=false (default apikey header)', () => {
+    let app: INestApplication;
+    let moduleRef: TestingModule;
+    let server: Server;
+    let webhookUseCase: HandlePaymentWebhookUseCase;
+    let executeSpy: jest.SpyInstance;
+
+    beforeAll(async () => {
+      process.env['HELIPAGOS_WEBHOOK_SECRET'] = WEBHOOK_SECRET;
+      process.env['HELIPAGOS_WEBHOOK_SECRET_HEADER'] = 'apikey';
+      process.env['HELIPAGOS_WEBHOOK_SECRET_REQUIRED'] = 'false';
+
+      ({ app, moduleRef } = await createTestApp());
+      webhookUseCase = moduleRef.get(HandlePaymentWebhookUseCase);
+      server = app.getHttpServer() as Server;
+    });
+
+    afterAll(async () => {
+      await app.close();
+      delete process.env['HELIPAGOS_WEBHOOK_SECRET'];
+      delete process.env['HELIPAGOS_WEBHOOK_SECRET_HEADER'];
+      delete process.env['HELIPAGOS_WEBHOOK_SECRET_REQUIRED'];
+    });
+
+    beforeEach(() => {
+      executeSpy = jest.spyOn(webhookUseCase, 'execute');
+      jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    // ── C1 ────────────────────────────────────────────────────────────────────
+
+    it('should return 200 and invoke the use case when the correct apikey is sent', async () => {
+      const res = await request(server)
+        .post('/api/payments/webhook')
+        .set('apikey', WEBHOOK_SECRET)
+        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-c1'));
 
       expect(res.status).toBe(200);
       expect(executeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    // ── C2 ────────────────────────────────────────────────────────────────────
+
+    it('should return 200 and NOT invoke the use case when a wrong apikey is sent', async () => {
+      const res = await request(server)
+        .post('/api/payments/webhook')
+        .set('apikey', 'wrong-secret-value')
+        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-c2'));
+
+      expect(res.status).toBe(200);
+      expect(executeSpy).not.toHaveBeenCalled();
+    });
+
+    // ── C3 ────────────────────────────────────────────────────────────────────
+
+    it('should return 200 and invoke the use case when the apikey header is absent (REQUIRED=false)', async () => {
+      // REQUIRED=false means an absent header is accepted for compatibility.
+      const res = await request(server)
+        .post('/api/payments/webhook')
+        .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-c3'));
+
+      expect(res.status).toBe(200);
+      expect(executeSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── Group D: custom header name (HELIPAGOS_WEBHOOK_SECRET_HEADER) ─────────
+
+  describe('Group D: custom header override (x-helipagos-signature)', () => {
+    const CUSTOM_HEADER = 'x-helipagos-signature';
+
+    // ── D REQUIRED=true ───────────────────────────────────────────────────────
+
+    describe('REQUIRED=true', () => {
+      let app: INestApplication;
+      let moduleRef: TestingModule;
+      let server: Server;
+      let webhookUseCase: HandlePaymentWebhookUseCase;
+      let executeSpy: jest.SpyInstance;
+
+      beforeAll(async () => {
+        process.env['HELIPAGOS_WEBHOOK_SECRET'] = WEBHOOK_SECRET;
+        process.env['HELIPAGOS_WEBHOOK_SECRET_HEADER'] = CUSTOM_HEADER;
+        process.env['HELIPAGOS_WEBHOOK_SECRET_REQUIRED'] = 'true';
+
+        ({ app, moduleRef } = await createTestApp());
+        webhookUseCase = moduleRef.get(HandlePaymentWebhookUseCase);
+        server = app.getHttpServer() as Server;
+      });
+
+      afterAll(async () => {
+        await app.close();
+        delete process.env['HELIPAGOS_WEBHOOK_SECRET'];
+        delete process.env['HELIPAGOS_WEBHOOK_SECRET_HEADER'];
+        delete process.env['HELIPAGOS_WEBHOOK_SECRET_REQUIRED'];
+      });
+
+      beforeEach(() => {
+        executeSpy = jest.spyOn(webhookUseCase, 'execute');
+        jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      });
+
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      // ── D2 ──────────────────────────────────────────────────────────────────
+
+      it('should return 200 and invoke the use case when the correct custom header is sent', async () => {
+        const res = await request(server)
+          .post('/api/payments/webhook')
+          .set(CUSTOM_HEADER, WEBHOOK_SECRET)
+          .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-d2'));
+
+        expect(res.status).toBe(200);
+        expect(executeSpy).toHaveBeenCalledTimes(1);
+      });
+
+      // ── D3 ──────────────────────────────────────────────────────────────────
+
+      it('should return 200 and NOT invoke the use case when apikey is sent but the custom header is absent (REQUIRED=true)', async () => {
+        // The controller reads CUSTOM_HEADER, not 'apikey'.
+        // Sending 'apikey' is irrelevant — the configured custom header is absent.
+        // With REQUIRED=true the request is silently ignored.
+        const res = await request(server)
+          .post('/api/payments/webhook')
+          .set('apikey', WEBHOOK_SECRET) // wrong header name — custom header absent
+          .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-d3'));
+
+        expect(res.status).toBe(200);
+        expect(executeSpy).not.toHaveBeenCalled();
+      });
+    });
+
+    // ── D REQUIRED=false ──────────────────────────────────────────────────────
+
+    describe('REQUIRED=false', () => {
+      let app: INestApplication;
+      let moduleRef: TestingModule;
+      let server: Server;
+      let webhookUseCase: HandlePaymentWebhookUseCase;
+      let executeSpy: jest.SpyInstance;
+
+      beforeAll(async () => {
+        process.env['HELIPAGOS_WEBHOOK_SECRET'] = WEBHOOK_SECRET;
+        process.env['HELIPAGOS_WEBHOOK_SECRET_HEADER'] = CUSTOM_HEADER;
+        process.env['HELIPAGOS_WEBHOOK_SECRET_REQUIRED'] = 'false';
+
+        ({ app, moduleRef } = await createTestApp());
+        webhookUseCase = moduleRef.get(HandlePaymentWebhookUseCase);
+        server = app.getHttpServer() as Server;
+      });
+
+      afterAll(async () => {
+        await app.close();
+        delete process.env['HELIPAGOS_WEBHOOK_SECRET'];
+        delete process.env['HELIPAGOS_WEBHOOK_SECRET_HEADER'];
+        delete process.env['HELIPAGOS_WEBHOOK_SECRET_REQUIRED'];
+      });
+
+      beforeEach(() => {
+        executeSpy = jest.spyOn(webhookUseCase, 'execute');
+        jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      });
+
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      // ── D4 ──────────────────────────────────────────────────────────────────
+
+      it('should return 200 and invoke the use case when apikey is sent but the custom header is absent (REQUIRED=false)', async () => {
+        // With REQUIRED=false, an absent custom header is accepted for compatibility.
+        // The 'apikey' header is irrelevant — custom header is simply absent.
+        const res = await request(server)
+          .post('/api/payments/webhook')
+          .set('apikey', WEBHOOK_SECRET) // wrong header name — custom header absent
+          .send(buildWebhookBody(UNKNOWN_ID_SP, 'PROCESADA', 'wh-d4'));
+
+        expect(res.status).toBe(200);
+        expect(executeSpy).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

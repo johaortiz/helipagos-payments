@@ -154,28 +154,34 @@ export class PaymentsController {
       '**This endpoint always returns HTTP 200**, regardless of whether the payload was ' +
       'processed or ignored. Any non-200 response would cause the provider to retry ' +
       'the delivery indefinitely.\n\n' +
-      '**Optional secret-header validation**\n\n' +
-      'When `HELIPAGOS_WEBHOOK_SECRET` is set in the environment, the controller ' +
-      'validates an incoming header before passing the event to the domain layer:\n\n' +
+      '**Webhook authentication (`apikey` header)**\n\n' +
+      'According to Helipagos documentation, webhook requests include an `apikey` header. ' +
+      'The value should match `HELIPAGOS_WEBHOOK_SECRET` (the "Webhook" token provided by ' +
+      'Helipagos — **not** the Bearer token used for outbound API calls to Helipagos).\n\n' +
+      'When `HELIPAGOS_WEBHOOK_SECRET` is set in the environment, the controller validates ' +
+      'the header before passing the event to the domain layer:\n\n' +
       '| Scenario | Behaviour |\n' +
       '|---|---|\n' +
       '| `HELIPAGOS_WEBHOOK_SECRET` not configured | Validation skipped — every request is processed |\n' +
-      '| Configured header **absent** in the request | Validation skipped — request is processed |\n' +
-      '| Configured header **present**, **correct** value | Request processed normally |\n' +
-      '| Configured header **present**, **wrong** value | Request silently ignored (HTTP 200, no processing) |\n\n' +
-      'The header name defaults to `x-webhook-secret` and can be overridden via ' +
-      '`HELIPAGOS_WEBHOOK_SECRET_HEADER`.',
+      '| Header **present**, **correct** value | Request processed normally |\n' +
+      '| Header **present**, **wrong** value | Request silently ignored (HTTP 200, no processing) |\n' +
+      '| Header **absent**, `HELIPAGOS_WEBHOOK_SECRET_REQUIRED=true` (default) | Request silently ignored (HTTP 200, no processing) |\n' +
+      '| Header **absent**, `HELIPAGOS_WEBHOOK_SECRET_REQUIRED=false` | Validation skipped — request is processed |\n\n' +
+      'The header name defaults to `apikey` and can be overridden via `HELIPAGOS_WEBHOOK_SECRET_HEADER`.',
   })
   @ApiHeader({
-    name: 'x-webhook-secret',
+    name: 'apikey',
     description:
-      'Optional shared secret for webhook authenticity verification. ' +
-      'Only checked when HELIPAGOS_WEBHOOK_SECRET is set in the environment. ' +
-      'The header name is configurable via HELIPAGOS_WEBHOOK_SECRET_HEADER ' +
-      '(default: x-webhook-secret). ' +
-      'If present and incorrect the request is ignored but HTTP 200 is still returned.',
+      'Webhook authentication header. ' +
+      'Helipagos documentation states that webhook requests include the "apikey" header. ' +
+      'The value should match HELIPAGOS_WEBHOOK_SECRET (the "Webhook" token provided by ' +
+      'Helipagos — not the Bearer token used for outbound API calls). ' +
+      'Controlled by: HELIPAGOS_WEBHOOK_SECRET (expected value; if unset, validation is skipped entirely), ' +
+      'HELIPAGOS_WEBHOOK_SECRET_HEADER (header name; default "apikey"), ' +
+      'HELIPAGOS_WEBHOOK_SECRET_REQUIRED (when "true" (default), absent header causes the request to be acknowledged but not processed; ' +
+      'when "false", absent header is accepted for compatibility).',
     required: false,
-    schema: { type: 'string', example: 'my-shared-secret' },
+    schema: { type: 'string', example: 'your-helipagos-webhook-token' },
   })
   @ApiResponse({
     status: 200,
@@ -200,11 +206,24 @@ export class PaymentsController {
     if (secret) {
       const headerName = this.configService.get<string>(
         'HELIPAGOS_WEBHOOK_SECRET_HEADER',
-        'x-webhook-secret',
+        'apikey',
       );
+      const secretRequired =
+        this.configService.get<string>(
+          'HELIPAGOS_WEBHOOK_SECRET_REQUIRED',
+          'true',
+        ) === 'true';
       const received = headers[headerName.toLowerCase()];
 
-      if (received !== undefined && received !== secret) {
+      if (received === undefined) {
+        if (secretRequired) {
+          this.logger.warn(
+            `Webhook "${headerName}" header absent — request ignored (HELIPAGOS_WEBHOOK_SECRET_REQUIRED=true)`,
+          );
+          return;
+        }
+        // secretRequired=false: absent header is accepted — process normally
+      } else if (received !== secret) {
         this.logger.warn(
           `Webhook secret mismatch — rejecting request (header: "${headerName}")`,
         );
