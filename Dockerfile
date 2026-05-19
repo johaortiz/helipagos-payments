@@ -10,7 +10,7 @@ ENV PATH="$PNPM_HOME:$PATH"
 # Suppress Husky git-hooks setup in every stage — no .git dir in Docker
 ENV HUSKY=0
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
 WORKDIR /app
 
